@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.local
+.env.production
+
+# Docker volumes
+postgres_data/
+redis_data/
+n8n_data/
+
+# n8n local directories
+workflows/
+credentials/
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+Thumbs.db
