@@ -3,16 +3,20 @@ FastAPI server for Medical Conversation System
 Exposes the PocketFlow medical agent as REST API endpoints
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
 from fastapi import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
+from passlib.hash import bcrypt
+from sqlalchemy.orm import Session
+from database.db import get_db, Users
 from typing import Optional, List, Dict, Any
 import logging
 from datetime import datetime
 import uvicorn
 import os
+
 from dotenv import load_dotenv
 
 # Import our flow and conversation logger
@@ -143,6 +147,27 @@ class RolesResponse(BaseModel):
     timestamp: str = Field(..., description="Response timestamp")
 
 
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=6, max_length=200)
+
+
+class LoginReq(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+
+
+class DeleteUserResponse(BaseModel):
+    message: str
+    deleted_user: UserOut
+    timestamp: str
+
+
 # API Endpoints
 
 
@@ -162,6 +187,67 @@ async def health_check():
     """Health check endpoint"""
     return HealthResponse(
         status="healthy", timestamp=datetime.now().isoformat(), version="1.0.0"
+    )
+
+
+@router.post("/users", response_model=UserOut, status_code=201)
+def create_user(payload: UserCreate, db: Session = Depends(get_db)):
+    # duplicate check
+    if db.query(Users).filter(Users.email == payload.email).first():
+        raise HTTPException(status_code=409, detail="Email already exists")
+
+    hashed = bcrypt.hash(payload.password)
+    user = Users(email=payload.email, password=hashed)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return UserOut(id=user.id, email=user.email)
+
+
+@router.post("/auth/login", response_model=UserOut)
+def login(body: LoginReq, db: Session = Depends(get_db)):
+    user = db.query(Users).filter(Users.email == body.email).first()
+    if not user or not bcrypt.verify(body.password, user.password):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    return UserOut(id=user.id, email=user.email)
+
+
+@router.get("/users", response_model=List[UserOut])
+def get_all_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """
+    Get all users with pagination
+
+    - **skip**: Number of users to skip (default: 0)
+    - **limit**: Maximum number of users to return (default: 100, max: 1000)
+    """
+    if limit > 1000:
+        limit = 1000
+
+    users = db.query(Users).offset(skip).limit(limit).all()
+    return [UserOut(id=user.id, email=user.email) for user in users]
+
+
+@router.delete("/users/{user_id}", response_model=DeleteUserResponse)
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    """
+    Delete user by ID
+
+    - **user_id**: The ID of the user to delete
+    """
+    user = db.query(Users).filter(Users.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Store user info before deletion
+    deleted_user_info = UserOut(id=user.id, email=user.email)
+
+    db.delete(user)
+    db.commit()
+
+    return DeleteUserResponse(
+        message=f"User {user_id} deleted successfully",
+        deleted_user=deleted_user_info,
+        timestamp=datetime.now().isoformat(),
     )
 
 
