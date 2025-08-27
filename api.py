@@ -3,21 +3,26 @@ FastAPI server for Medical Conversation System
 Exposes the PocketFlow medical agent as REST API endpoints
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Header
 from fastapi import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, EmailStr
 from passlib.hash import bcrypt
 from sqlalchemy.orm import Session
-from database.db import get_db, Users
+from database.db import get_db, Users, ChatMessage, ChatThreads
+from database.models import ChatThread
 from typing import Optional, List, Dict, Any
 import logging
 from datetime import datetime
 import uvicorn
 import os
+import uuid
 
 from dotenv import load_dotenv
+
+# Import chat routes
+from chat_routes import router as chat_router
 
 # Import our flow and conversation logger
 from flow import create_med_agent_flow
@@ -160,6 +165,11 @@ class LoginReq(BaseModel):
 class UserOut(BaseModel):
     id: int
     email: EmailStr
+    
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserOut
 
 
 class DeleteUserResponse(BaseModel):
@@ -204,12 +214,23 @@ def create_user(payload: UserCreate, db: Session = Depends(get_db)):
     return UserOut(id=user.id, email=user.email)
 
 
-@router.post("/auth/login", response_model=UserOut)
+from utils.auth import create_access_token
+
+@router.post("/auth/login", response_model=TokenResponse)
 def login(body: LoginReq, db: Session = Depends(get_db)):
     user = db.query(Users).filter(Users.email == body.email).first()
     if not user or not bcrypt.verify(body.password, user.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
-    return UserOut(id=user.id, email=user.email)
+    
+    # Create access token
+    token_data = {"sub": str(user.id)}
+    access_token = create_access_token(token_data)
+    
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserOut(id=user.id, email=user.email)
+    )
 
 
 @router.get("/users", response_model=List[UserOut])
@@ -294,21 +315,66 @@ async def get_available_roles():
         raise HTTPException(status_code=500, detail=f"Error retrieving roles: {str(e)}")
 
 
+from utils.auth import get_current_user
+
 @router.post("/chat", response_model=ConversationResponse)
-async def chat(request: ConversationRequest, background_tasks: BackgroundTasks):
+async def chat(
+    request: ConversationRequest, 
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
     """
     Main chat endpoint for medical conversations
 
     - **message**: User's input message
     - **role**: User's role in medical context
-    - **session_id**: Optional session identifier
+    - **session_id**: Optional session identifier (thread_id from database)
+    
+    Requires authentication via JWT token
     """
     try:
+        # Get user_id from the authenticated user
+        user_id = current_user.id
+        
+        # Make sure we have a valid thread_id (session_id)
+        thread_id = request.session_id
+        if not thread_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="session_id (thread_id) is required"
+            )
+            
+        # Verify that the thread belongs to the current user
+        thread = db.query(ChatThread).filter(
+            ChatThread.id == thread_id,
+            ChatThread.user_id == user_id
+        ).first()
+        
+        if not thread:
+            raise HTTPException(
+                status_code=404,
+                detail="Thread not found or you don't have permission to access it"
+            )
+            
         # Convert role ID to role name if needed
         role_name = get_role_name(request.role)
         logger.info(
             f"🔥 New chat request - Role: {role_name} (from: {request.role}), Message: {request.message[:50]}..."
         )
+
+        # Store user message in database
+        user_message_id = str(uuid.uuid4())
+        user_message = ChatMessage(
+            id=user_message_id,
+            thread_id=thread_id,
+            role="user",
+            content=request.message.strip(),
+            timestamp=datetime.now(),
+            api_role=request.role
+        )
+        db.add(user_message)
+        db.commit()
 
         # Prepare shared data for the flow
         shared = {
@@ -355,11 +421,32 @@ async def chat(request: ConversationRequest, background_tasks: BackgroundTasks):
             need_clarify=need_clarify,
         )
 
+        # Store bot message in database
+        bot_message = ChatMessage(
+            id=str(uuid.uuid4()),
+            thread_id=thread_id,
+            role="bot",
+            content=explanation,
+            timestamp=datetime.now(),
+            suggestions=question_suggestions,
+            summary=summary,
+            need_clarify=need_clarify,
+            input_type=input_type
+        )
+        db.add(bot_message)
+        
+        # Update thread's updated_at timestamp
+        thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
+        if thread:
+            thread.updated_at = datetime.now()
+        
+        db.commit()
+
         # Log conversation in background (async)
         background_tasks.add_task(
             log_conversation_background,
             request.message,
-            explanation,  # Use the parsed explanation instead
+            explanation,
             request.session_id,
         )
 
@@ -493,6 +580,9 @@ async def general_exception_handler(request, exc):
 
 # Include router after defining routes
 app.include_router(router)
+
+# Include chat threads router
+app.include_router(chat_router)
 
 if __name__ == "__main__":
     # Get configuration from environment
