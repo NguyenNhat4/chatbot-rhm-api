@@ -116,16 +116,11 @@ class ConversationRequest(BaseModel):
 
 class ConversationResponse(BaseModel):
     explanation: str = Field(..., description="Main explanation/answer content")
-    summary: str = Field(..., description="Brief summary of key points")
-    questionSuggestion: Optional[List[str]] = Field(
-        None, description="Follow-up question suggestions"
-    )
+    questionSuggestion: Optional[List[str]] = Field(None, description="Follow-up question suggestions")
     session_id: Optional[str] = Field(None, description="Session identifier")
     timestamp: str = Field(..., description="Response timestamp")
     input_type: Optional[str] = Field(None, description="Classified input type")
-    need_clarify: Optional[bool] = Field(
-        None, description="Whether response needs clarification"
-    )
+    need_clarify: Optional[bool] = Field(None, description="Whether response needs clarification")
 
 
 class HealthResponse(BaseModel):
