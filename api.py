@@ -404,7 +404,7 @@ async def chat(
         # Prepare shared data for the flow
         shared = {
             "role": role_name,
-            "input": request.message,
+            "input": request.message.strip(),
             "query": "",
             "explain": "",
             "conversation_history": thread.messages,
