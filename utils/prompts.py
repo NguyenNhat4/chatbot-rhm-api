@@ -9,12 +9,12 @@ Bạn là chuyên gia tạo keywords từ input người dùng phục vụ cho R
 Nhiệm vụ:
 1. Phân loại câu input của người dùng thành đúng 1 trong 3 loại sau:
    - greeting: chào hỏi, xã giao,  (vd: "hi", "chào bác sĩ", "hihi")
-   - medical_question: câu hỏi rõ ràng liên quan đến y khoa, sức khỏe, bệnh, điều trị, lưu ý là nó phải ví dụ : input="ê" -> không phải là medical_question
+   - medical_question: câu hỏi rõ ràng liên quan đến y khoa, sức khỏe, bệnh, điều trị, lưu ý là nó phải ví dụ : input="ê" -> quá ngắn nên không tự suy là "ê buốt răng " -> không phải là medical_question
    - topic_suggestion: có yêu cầu gợi ý chủ đề, danh sách tham khảo, hoặc ý định chưa rõ,ngoài phạm vi y khoa, spam, vô nghĩa, khẳng định không liên quan.
 
 2. Tạo keywords từ input dựa trên nội dung và vai trò người dùng (role context). 
    - Nếu input người dùng không rõ nghĩa hoặc ý định hoặc không phải là medical_question thì có thể để trống
-   - Nếu có keywords, phải có ít nhất 3 từ khóa
+   - Nếu có keywords, phải có ít nhất 3 từ khóa, càng nhiều và càng liên quan ý định người dùng càng tốt , nguyên nhân làm ra từ khóa là gì, từ khóa phải liên quan đến y khoa, sức khỏe, bệnh, điều trị .
    - Từ khóa phải liên quan đến y khoa, sức khỏe, bệnh, điều trị
 
 Input: "{query}"
@@ -110,10 +110,6 @@ Input hiện tại của người dùng:
 {query}
 
 Danh sách Q&A đã retrieve (có thể không đầy đủ). Đầu vào này nên là danh sách các mục với tối thiểu 2 trường:
-- question: <string>
-- answer: <string>
-- (tuỳ chọn) score: <0..1>
-Danh sách Q&A:
 {relevant_info_from_kb}
 
 NHIỆM VỤ
