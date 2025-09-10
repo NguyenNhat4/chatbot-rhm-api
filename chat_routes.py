@@ -1,334 +1,213 @@
 """
-Chat API endpoints for thread and message management
+Clean and refactored chat API endpoints for thread and message management
 """
 
+import logging
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime
-import uuid
+from typing import List
 
 from database.db import get_db
-from database.models import Users, ChatThread, ChatMessage
+from utils.auth import get_current_user
+from database.models import Users
+from services.chat_service import ChatService
+from schemas.chat_schemas import (
+    ThreadSchema,
+    ThreadWithMessagesSchema,
+    ThreadMessagesResponse,
+    CreateThreadRequest,
+    RenameThreadRequest,
+    SendMessageRequest,
+)
 
-# Pydantic models for request/response
-class MessageModel(BaseModel):
-    id: str
-    role: str
-    content: str
-    timestamp: datetime
-    apiRole: Optional[str] = None
-    suggestions: Optional[List[str]] = None
-    summary: Optional[str] = None
-    needClarify: Optional[bool] = None
-    inputType: Optional[str] = None
-
-    class Config:
-        orm_mode = True
-
-class ThreadModel(BaseModel):
-    id: str
-    name: str
-    createdAt: datetime
-    updatedAt: datetime
-    
-    class Config:
-        orm_mode = True
-
-class ThreadWithMessagesModel(ThreadModel):
-    messages: List[MessageModel]
-
-class CreateThreadRequest(BaseModel):
-    name: str = Field(..., min_length=1)
-
-class RenameThreadRequest(BaseModel):
-    name: str = Field(..., min_length=1)
-
-class SendMessageRequest(BaseModel):
-    content: str = Field(..., min_length=1)
-    role: Optional[str] = None
+# Configure logger
+logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/api/threads")
+router = APIRouter(prefix="/api/threads", tags=["chat"])
 
-# Use the authentication from utils.auth
-from utils.auth import get_current_user
 
-# Helper function to get user_id from current authenticated user using JWT
 def get_current_user_id(current_user: Users = Depends(get_current_user)) -> int:
-    """
-    Get the current user's ID from JWT authentication
-    """
+    """Extract user ID from authenticated user"""
     return current_user.id
 
-@router.get("/", response_model=List[ThreadModel])
-def get_threads(
+
+def get_chat_service(db: Session = Depends(get_db)) -> ChatService:
+    """Dependency to get chat service instance"""
+    return ChatService(db)
+
+
+@router.get("/", response_model=List[ThreadSchema])
+async def get_threads(
+    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
 ):
     """
     Get all chat threads for the current user
-    """
-    threads = db.query(ChatThread).filter(ChatThread.user_id == user_id).order_by(
-        ChatThread.updated_at.desc()
-    ).all()
     
-    return [
-        ThreadModel(
-            id=thread.id,
-            name=thread.name,
-            createdAt=thread.created_at,
-            updatedAt=thread.updated_at
-        ) for thread in threads
-    ]
+    Returns threads ordered by most recently updated first.
+    Requires authentication via JWT token.
+    """
+    try:
+        logger.info(f"Getting threads for user {user_id}")
+        threads = chat_service.get_user_threads(user_id)
+        logger.info(f"Retrieved {len(threads)} threads for user {user_id}")
+        return threads
+    
+    except Exception as e:
+        logger.error(f"Error getting threads for user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve threads"
+        )
 
-@router.post("/", response_model=ThreadModel, status_code=status.HTTP_201_CREATED)
-def create_thread(
+
+@router.post("/", response_model=ThreadSchema, status_code=status.HTTP_201_CREATED)
+async def create_thread(
     request: CreateThreadRequest,
+    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
 ):
     """
-    Create a new chat thread
+    Create a new chat thread with welcome message
+    
+    Creates a new thread and automatically adds a welcome message.
+    Requires authentication via JWT token.
     """
-    # Create thread with welcome message
-    thread_id = str(uuid.uuid4())
-    new_thread = ChatThread(
-        id=thread_id,
-        user_id=user_id,
-        name=request.name,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-    )
+    try:
+        logger.info(f"Creating thread '{request.name}' for user {user_id}")
+        thread = chat_service.create_thread(user_id, request.name)
+        logger.info(f"Created thread {thread.id} for user {user_id}")
+        return thread
     
-    # Add welcome message
-    welcome_message = ChatMessage(
-        id=str(uuid.uuid4()),
-        thread_id=thread_id,
-        role="bot",
-        content="Xin chào! Tôi là trợ lý AI của bạn. Rất vui được hỗ trợ bạn - Bạn cần tôi giúp gì hôm nay?",
-        timestamp=datetime.now(),
-    )
-    
-    db.add(new_thread)
-    db.add(welcome_message)
-    db.commit()
-    
-    return ThreadModel(
-        id=new_thread.id,
-        name=new_thread.name,
-        createdAt=new_thread.created_at,
-        updatedAt=new_thread.updated_at
-    )
-class MessageInfo(BaseModel):
-    id: str = Field(..., description="Message ID")
-    role: str = Field(..., description="Message role (user/bot)")
-    content: str = Field(..., description="Message content")
-    timestamp: str = Field(..., description="Message timestamp")
-    api_role: Optional[str] = Field(None, description="API role used for user messages")
-    suggestions: Optional[List[str]] = Field(None, description="Bot message suggestions")
-    need_clarify: Optional[bool] = Field(None, description="Whether response needs clarification")
-    input_type: Optional[str] = Field(None, description="Classified input type")
-
-
-class ThreadMessagesResponse(BaseModel):
-    thread_id: str = Field(..., description="Thread identifier")
-    thread_name: str = Field(..., description="Thread name")
-    messages: List[MessageInfo] = Field(..., description="List of messages in chronological order")
-    total_messages: int = Field(..., description="Total number of messages")
-    user_id: int = Field(..., description="User ID")
-    created_at: str = Field(..., description="Thread creation timestamp")
-    updated_at: str = Field(..., description="Thread last update timestamp")
+    except Exception as e:
+        logger.error(f"Error creating thread for user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create thread"
+        )
 
 
 @router.get("/threads/{thread_id}/messages", response_model=ThreadMessagesResponse)
 async def get_thread_messages(
     thread_id: str,
     page: int = 1,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    limit: int = None,
+    chat_service: ChatService = Depends(get_chat_service),
+    user_id: int = Depends(get_current_user_id),
 ):
     """
-    Get all messages for a specific conversation thread
+    Get messages for a specific thread with pagination
     
-    - **thread_id**: The thread/session identifier
-    - **page**: Page number for pagination (default: 1)
-    - **limit**: Number of messages per page (default: 50, max: 200)
+    Args:
+        thread_id: The thread identifier
+        page: Page number for pagination (default: 1)
+        limit: Number of messages per page (default: 50, max: 200)
     
-    Returns all messages in chronological order for the specified thread.
-    Only accessible by the thread owner. Perfect for loading full conversation
-    when user clicks on a thread from the sidebar.
+    Returns messages in chronological order with pagination info.
+    Only accessible by the thread owner.
     Requires authentication via JWT token.
     """
     try:
-        # Validate limit
-        if limit > 200:
-            limit = 200
-        if limit < 1:
-            limit = 1
-        if page < 1:
-            page = 1
-            
-        # Verify thread exists and belongs to current user
-        thread = db.query(ChatThread).filter(
-            ChatThread.id == thread_id,
-            ChatThread.user_id == current_user.id
-        ).first()
-        
-        if not thread:
-            raise HTTPException(
-                status_code=404,
-                detail="Thread not found or you don't have permission to access it"
-            )
-        
-        # Calculate offset for pagination
-        offset = (page - 1) * limit
-        
-        # Get total message count
-        total_messages = db.query(ChatMessage).filter(
-            ChatMessage.thread_id == thread_id
-        ).count()
-        
-        # Get messages for this thread with pagination
-        messages = db.query(ChatMessage).filter(
-            ChatMessage.thread_id == thread_id
-        ).order_by(ChatMessage.timestamp.asc()).offset(offset).limit(limit).all()
-        
-        # Format messages
-        formatted_messages = []
-        for message in messages:
-            message_info = MessageInfo(
-                id=message.id,
-                role=message.role,
-                content=message.content,
-                timestamp=message.timestamp.isoformat(),
-                api_role=message.api_role,
-                suggestions=message.suggestions,
-                need_clarify=message.need_clarify,
-                input_type=message.input_type
-            )
-            formatted_messages.append(message_info)
-        
-        return ThreadMessagesResponse(
-            thread_id=thread.id,
-            thread_name=thread.name,
-            messages=formatted_messages,
-            total_messages=total_messages,
-            user_id=current_user.id,
-            created_at=thread.created_at.isoformat(),
-            updated_at=thread.updated_at.isoformat()
-        )
-
+        logger.info(f"Getting messages for thread {thread_id}, page {page}, limit {limit}")
+        result = chat_service.get_thread_messages_paginated(thread_id, user_id, page, limit)
+        logger.info(f"Retrieved {len(result.messages)} messages for thread {thread_id}")
+        return result
+    
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Error getting thread messages: {str(e)}")
+        logger.error(f"Error getting messages for thread {thread_id}: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Error retrieving thread messages: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve thread messages"
         )
 
 
-@router.get("/{thread_id}", response_model=ThreadWithMessagesModel)
-def get_thread(
+@router.get("/{thread_id}", response_model=ThreadWithMessagesSchema)
+async def get_thread(
     thread_id: str,
+    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
 ):
     """
     Get a specific chat thread with all messages
+    
+    Returns the thread details along with all messages in chronological order.
+    Use this endpoint when you need all messages without pagination.
+    Only accessible by the thread owner.
+    Requires authentication via JWT token.
     """
-    thread = db.query(ChatThread).filter(
-        ChatThread.id == thread_id,
-        ChatThread.user_id == user_id
-    ).first()
+    try:
+        logger.info(f"Getting thread {thread_id} with all messages")
+        result = chat_service.get_thread_with_messages(thread_id, user_id)
+        logger.info(f"Retrieved thread {thread_id} with {result.total_messages} messages")
+        return result
     
-    if not thread:
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting thread {thread_id}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve thread"
         )
-    
-    messages = db.query(ChatMessage).filter(
-        ChatMessage.thread_id == thread_id
-    ).order_by(
-        ChatMessage.timestamp.asc()
-    ).all()
-    
-    return ThreadWithMessagesModel(
-        id=thread.id,
-        name=thread.name,
-        createdAt=thread.created_at,
-        updatedAt=thread.updated_at,
-        messages=[
-            MessageModel(
-                id=msg.id,
-                role=msg.role,
-                content=msg.content,
-                timestamp=msg.timestamp,
-                apiRole=msg.api_role,
-                suggestions=msg.suggestions,
-                summary=msg.summary,
-                needClarify=msg.need_clarify,
-                inputType=msg.input_type
-            ) for msg in messages
-        ]
-    )
 
-@router.put("/{thread_id}/rename", response_model=ThreadModel)
-def rename_thread(
+
+@router.put("/{thread_id}/rename", response_model=ThreadSchema)
+async def rename_thread(
     thread_id: str,
     request: RenameThreadRequest,
+    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
 ):
     """
     Rename a chat thread
+    
+    Updates the thread name and the updated_at timestamp.
+    Only accessible by the thread owner.
+    Requires authentication via JWT token.
     """
-    thread = db.query(ChatThread).filter(
-        ChatThread.id == thread_id,
-        ChatThread.user_id == user_id
-    ).first()
+    try:
+        logger.info(f"Renaming thread {thread_id} to '{request.name}'")
+        result = chat_service.rename_thread(thread_id, user_id, request.name)
+        logger.info(f"Renamed thread {thread_id}")
+        return result
     
-    if not thread:
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error renaming thread {thread_id}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to rename thread"
         )
-    
-    thread.name = request.name
-    thread.updated_at = datetime.now()
-    db.commit()
-    
-    return ThreadModel(
-        id=thread.id,
-        name=thread.name,
-        createdAt=thread.created_at,
-        updatedAt=thread.updated_at
-    )
+
 
 @router.delete("/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_thread(
+async def delete_thread(
     thread_id: str,
+    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id),
-    db: Session = Depends(get_db),
 ):
     """
     Delete a chat thread
+    
+    Permanently deletes the thread and all associated messages.
+    Only accessible by the thread owner.
+    Requires authentication via JWT token.
     """
-    thread = db.query(ChatThread).filter(
-        ChatThread.id == thread_id,
-        ChatThread.user_id == user_id
-    ).first()
+    try:
+        logger.info(f"Deleting thread {thread_id}")
+        chat_service.delete_thread(thread_id, user_id)
+        logger.info(f"Deleted thread {thread_id}")
+        return None
     
-    if not thread:
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting thread {thread_id}: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Thread not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete thread"
         )
-    
-    db.delete(thread)
-    db.commit()
-    
-    return None
