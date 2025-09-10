@@ -22,20 +22,3 @@ ROLE_DESCRIPTION: Dict[RoleEnum, str] = {
     RoleEnum.DOCTOR_DENTAL: "Dành cho bác sĩ nha khoa cần tư vấn về tác động của đái tháo đường đến điều trị nha khoa",
     RoleEnum.DOCTOR_ENDOCRINE: "Dành cho bác sĩ nội tiết cần hiểu về biến chứng răng miệng ở bệnh nhân đái tháo đường",
 }
-
-
-def get_role_name(role_input: str) -> str:
-    """Convert role ID to display name; if input is already a known display name, return it; otherwise default to patient dental name."""
-    # If it's an ID in our enum
-    try:
-        enum_role = RoleEnum(role_input)
-        return ROLE_DISPLAY_NAME[enum_role]
-    except ValueError:
-        pass
-
-    # If it's already a display name
-    if role_input in ROLE_DISPLAY_NAME.values():
-        return role_input
-
-    # Fallback default
-    return ROLE_DISPLAY_NAME[RoleEnum.PATIENT_DENTAL]

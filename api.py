@@ -33,7 +33,7 @@ from utils.response_parser import (
     handle_statement_response,
 )
 from utils.helpers import serialize_conversation_history
-from utils.role_ENUM import RoleEnum, ROLE_DISPLAY_NAME, ROLE_DESCRIPTION, get_role_name
+from utils.role_ENUM import RoleEnum, ROLE_DISPLAY_NAME, ROLE_DESCRIPTION
 
 # Load environment variables
 load_dotenv()
@@ -384,8 +384,7 @@ async def chat(
                 detail="Thread not found or you don't have permission to access it"
             )
             
-        # Convert role ID to role name if needed
-        role_name = get_role_name(request.role)
+        role_name = request.role
         logger.info(
             f"🔥 New chat request - Role: {role_name} (from: {request.role}), Message: {request.message[:50]}..."
         )
