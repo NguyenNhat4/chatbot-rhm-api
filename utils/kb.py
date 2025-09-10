@@ -2,27 +2,26 @@ import os
 import random
 from typing import List, Dict, Any, Tuple, Optional
 import pandas as pd
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from unidecode import unidecode
-
+from .role_ENUM import RoleEnum
 
 KB_COLUMNS = [
     "ĐỀ MỤC",
     "CHỦ  ĐỀ  CON",
     "MÃ SỐ",
     "CÂU HỎI",
-    "CÂU  TRẢ    LỜI",
+    "CÂU  TRẢ    LỜI",  
     "keywords",
 ]
 
 ROLE_TO_CSV = {
-    "bệnh nhân đái tháo đường": "bndtd.csv",
-    "bác sĩ nội tiết": "bsnt.csv", 
-    "bệnh nhân răng hàm mặt": "bnrhm.csv",
-    "bác sĩ răng hàm mặt": "bsrhm.csv",
-    "bệnh nhân nha khoa": "bnrhm.csv",
-    "bác sĩ nha khoa": "bsrhm.csv",    
+    RoleEnum.PATIENT_DIABETES.value: "bndtd.csv",
+    RoleEnum.DOCTOR_ENDOCRINE.value: "bsnt.csv", 
+    RoleEnum.PATIENT_DENTAL.value: "bnrhm.csv",
+    RoleEnum.DOCTOR_DENTAL.value: "bsrhm.csv",
 }
 
 
@@ -52,12 +51,18 @@ class KnowledgeBaseIndex:
         self.matrix = None
         # Store individual CSV dataframes for role-based access
         self.role_dataframes: Dict[str, pd.DataFrame] = {}
+        # Store role-specific vectorizers and matrices
+        self.role_vectorizers: Dict[str, TfidfVectorizer] = {}
+        self.role_matrices: Dict[str, Any] = {}
         self._load()
 
     def _load(self) -> None:
         frames: List[pd.DataFrame] = []
         if not os.path.isdir(self.kb_dir):
             raise FileNotFoundError(f"Knowledge base directory not found: {self.kb_dir}")
+
+        # Create reverse mapping from CSV filename to role enum value
+        csv_to_role = {filename: role_key for role_key, filename in ROLE_TO_CSV.items()}
 
         for name in os.listdir(self.kb_dir):
             if not name.lower().endswith(".csv"):
@@ -116,11 +121,42 @@ class KnowledgeBaseIndex:
             # Store individual CSV dataframe for role-based access
             self.role_dataframes[name] = df.copy()
             
+            # Create role-specific vectorizer if this CSV maps to a role
+            if name in csv_to_role and len(df) > 0:
+                role_key = csv_to_role[name]
+                
+                # Create combined field for this role's data
+                role_df = df.copy()
+                role_df["combined"] = (
+                    role_df["ĐỀ MỤC"]
+                    + " \n "
+                    + role_df["CHỦ  ĐỀ  CON"]
+                    + " \n "
+                    + role_df["CÂU HỎI"]
+                    + " \n "
+                    + role_df["CÂU  TRẢ    LỜI"]
+                    + " \n "
+                    + role_df["keywords"]
+                )
+                role_df["combined_norm"] = role_df["combined"].apply(_normalize_accents)
+                
+                # Create vectorizer and matrix for this role
+                role_vectorizer = TfidfVectorizer(
+                    ngram_range=(1, 2),
+                    min_df=1,
+                    max_df=0.95,
+                )
+                role_matrix = role_vectorizer.fit_transform(role_df["combined_norm"])
+                
+                self.role_vectorizers[role_key] = role_vectorizer
+                self.role_matrices[role_key] = role_matrix
+            
             frames.append(df)
 
         if not frames:
             raise ValueError("No CSV files loaded from knowledge base directory")
 
+        # Create merged dataframe for fallback search
         merged = pd.concat(frames, ignore_index=True)
 
         # Combined field for retrieval
@@ -140,6 +176,7 @@ class KnowledgeBaseIndex:
 
         self.df = merged
 
+        # Create general vectorizer for fallback search
         self.vectorizer = TfidfVectorizer(
             ngram_range=(1, 2),
             min_df=1,
@@ -147,17 +184,38 @@ class KnowledgeBaseIndex:
         )
         self.matrix = self.vectorizer.fit_transform(self.df["combined_norm"])  # type: ignore[arg-type]
 
-    def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
+    def search(self, query: str, role: Optional[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         if not query.strip():
             return []
-        assert self.vectorizer is not None and self.matrix is not None
+        
+        # Role-specific search
+        if role and role in self.role_vectorizers:
+            vectorizer = self.role_vectorizers[role]
+            matrix = self.role_matrices[role]
+            # Find corresponding dataframe
+            csv_file = ROLE_TO_CSV.get(role)
+            if csv_file and csv_file in self.role_dataframes:
+                source_df = self.role_dataframes[csv_file]
+            else:
+                # Fallback to general search if no role-specific data
+                vectorizer = self.vectorizer
+                matrix = self.matrix
+                source_df = self.df
+        else:
+            # General search across all data
+            assert self.vectorizer is not None and self.matrix is not None
+            vectorizer = self.vectorizer
+            matrix = self.matrix
+            source_df = self.df
+        
         q = _normalize_accents(_normalize_text(query))
-        q_vec = self.vectorizer.transform([q])
-        sims = cosine_similarity(q_vec, self.matrix).ravel()
+        q_vec = vectorizer.transform([q])
+        sims = cosine_similarity(q_vec, matrix).ravel()
         idx = sims.argsort()[::-1][:top_k]
+        
         results: List[Dict[str, Any]] = []
         for i in idx:
-            row = self.df.iloc[int(i)]
+            row = source_df.iloc[int(i)]
             results.append(
                 {
                     "score": float(sims[int(i)]),
@@ -171,8 +229,8 @@ class KnowledgeBaseIndex:
             )
         return results
 
-    def best_score(self, query: str) -> float:
-        hits = self.search(query, top_k=1)
+    def best_score(self, query: str, role: Optional[str] = None) -> float:
+        hits = self.search(query, role=role, top_k=1)
         return hits[0]["score"] if hits else 0.0
 
     def get_random_by_role(self, role: str, amount: int = 5) -> List[Dict[str, Any]]:
@@ -183,7 +241,7 @@ class KnowledgeBaseIndex:
         role_lower = role.lower()
         
         for role_key, file_name in ROLE_TO_CSV.items():
-            if role_key in role_lower:
+            if role_key == role_lower:
                 csv_file = file_name
                 break
         
@@ -225,9 +283,9 @@ def get_kb() -> KnowledgeBaseIndex:
     return _KB_INDEX
 
 
-def retrieve(query: str, top_k: int = 5) -> Tuple[List[Dict[str, Any]], float]:
+def retrieve(query: str, role: Optional[str] = None, top_k: int = 5) -> Tuple[List[Dict[str, Any]], float]:
     kb = get_kb()
-    results = kb.search(query, top_k=top_k)
+    results = kb.search(query, role=role, top_k=top_k)
     score = results[0]["score"] if results else 0.0
     return results, score
 
