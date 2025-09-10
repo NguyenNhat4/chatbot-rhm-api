@@ -33,6 +33,7 @@ from utils.response_parser import (
     handle_statement_response,
 )
 from utils.helpers import serialize_conversation_history
+from utils.role_ENUM import RoleEnum, ROLE_DISPLAY_NAME, ROLE_DESCRIPTION, get_role_name
 
 # Load environment variables
 load_dotenv()
@@ -75,45 +76,14 @@ router = APIRouter(prefix="/api")
 med_flow = create_med_agent_flow()
 
 
-# Role mapping helper
-def get_role_name(role_input: str) -> str:
-    """
-    Convert role ID to role name, or return the input if it's already a role name
-
-    Args:
-        role_input: Role ID or role name
-
-    Returns:
-        Standard role name for the medical flow
-    """
-    role_mapping = {
-        "patient_dental": "Bệnh nhân nha khoa",
-        "patient_diabetes": "Bệnh nhân đái tháo đường",
-        "doctor_dental": "Bác sĩ nha khoa",
-        "doctor_endocrine": "Bác sĩ nội tiết",
-    }
-
-    # If it's a role ID, convert to role name
-    if role_input in role_mapping:
-        return role_mapping[role_input]
-
-    # If it's already a role name, return as is
-    valid_role_names = list(role_mapping.values())
-    if role_input in valid_role_names:
-        return role_input
-
-    # Default fallback
-    logger.warning(f"Unknown role: {role_input}, using default")
-    return "Bệnh nhân nha khoa"
-
-
 # Pydantic models for request/response
 class ConversationRequest(BaseModel):
     message: str = Field(
-        ..., description="User's message", min_length=1, max_length=1000
+        ..., 
+        description="User's message"
     )
     role: str = Field(
-        default="Bệnh nhân nha khoa",
+        default=RoleEnum.PATIENT_DENTAL.value,
         description="User's role in the medical context (can be role name or role ID)",
     )
     session_id: Optional[str] = Field(
@@ -308,30 +278,16 @@ async def get_available_roles():
     try:
         roles = [
             RoleInfo(
-                id="patient_dental",
-                name="Bệnh nhân nha khoa",
-                description="Dành cho người cần tư vấn về các vấn đề răng miệng, nha chu, và chăm sóc sức khỏe răng miệng",
-            ),
-            RoleInfo(
-                id="patient_diabetes",
-                name="Bệnh nhân đái tháo đường",
-                description="Dành cho người mắc đái tháo đường cần tư vấn về mối liên hệ giữa bệnh đái tháo đường và sức khỏe răng miệng",
-            ),
-            RoleInfo(
-                id="doctor_dental",
-                name="Bác sĩ nha khoa",
-                description="Dành cho bác sĩ nha khoa cần tư vấn về tác động của đái tháo đường đến điều trị nha khoa",
-            ),
-            RoleInfo(
-                id="doctor_endocrine",
-                name="Bác sĩ nội tiết",
-                description="Dành cho bác sĩ nội tiết cần hiểu về biến chứng răng miệng ở bệnh nhân đái tháo đường",
-            ),
+                id=r.value,
+                name=ROLE_DISPLAY_NAME[r],
+                description=ROLE_DESCRIPTION[r],
+            )
+            for r in RoleEnum
         ]
 
         return RolesResponse(
             roles=roles,
-            default_role="patient_dental",
+            default_role=RoleEnum.PATIENT_DENTAL.value,
             timestamp=datetime.now().isoformat(),
         )
 
@@ -341,6 +297,7 @@ async def get_available_roles():
 
 
 from utils.auth import get_current_user
+
 
 @router.post("/chat", response_model=ConversationResponse)
 async def chat(
