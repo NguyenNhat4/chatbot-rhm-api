@@ -132,7 +132,8 @@ class RetrieveFromKB(Node):
         logger.info(f"📚 [RetrieveFromKB] PREP - Search Term: '{search_term[:100]}...'")
         return search_term, user_role
 
-    def exec(self, search_term: str, user_role: str):
+    def exec(self, inputs):
+        search_term, user_role = inputs
         logger.info("📚 [RetrieveFromKB] EXEC - Bắt đầu retrieve từ knowledge base")
         logger.info(f"📚 [RetrieveFromKB] EXEC - Query: {search_term}")
         results, score = retrieve(search_term, user_role,  top_k=4)
