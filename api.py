@@ -60,6 +60,33 @@ app = FastAPI(
     }
 )
 
+# Startup event to load knowledge base
+@app.on_event("startup")
+async def startup_event():
+    """Load knowledge base and initialize components at startup"""
+    logger.info("🚀 Starting Medical Conversation API...")
+    logger.info("🔄 Loading knowledge base...")
+    
+    try:
+        from utils.kb import get_kb
+        kb = get_kb()  # This will trigger the loading
+        logger.info(f"✅ Knowledge base loaded successfully!")
+        logger.info(f"📊 Total records: {len(kb.df)}")
+        logger.info(f"📁 Role-specific dataframes: {list(kb.role_dataframes.keys())}")
+        logger.info(f"🔧 Vectorizers created: {list(kb.role_vectorizers.keys())}")
+        
+        # Test a quick retrieval to ensure everything works
+        from utils.kb import retrieve
+        test_results, test_score = retrieve("test", top_k=1)
+        logger.info(f"🧪 Test retrieval successful: {len(test_results)} results, score: {test_score:.4f}")
+        
+        logger.info("🎉 API startup completed successfully!")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to load knowledge base: {str(e)}")
+        logger.error("⚠️  API will continue but chat functionality may be limited")
+        raise e
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,

@@ -47,4 +47,3 @@ def create_med_agent_flow():
     return flow
 
 
-med_flow = create_med_agent_flow()
