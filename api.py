@@ -119,7 +119,7 @@ class ConversationRequest(BaseModel):
 
 
 class ConversationResponse(BaseModel):
-    explanation: str = Field(..., description="Main explanation/answer content")
+    explanation: str = Field(..., description="Main explanation/answer content ")
     questionSuggestion: Optional[List[str]] = Field(None, description="Follow-up question suggestions")
     session_id: Optional[str] = Field(None, description="Session identifier")
     timestamp: str = Field(..., description="Response timestamp")
@@ -385,7 +385,10 @@ async def chat(
             ChatThread.id == thread_id,
             ChatThread.user_id == user_id
         ).first()
-        
+
+        # Lấy 3 message gần nhất của thread
+        if thread:
+            thread.messages = sorted(thread.messages, key=lambda m: m.timestamp, reverse=True)[:3][::-1]
         if not thread:
             raise HTTPException(
                 status_code=404,
