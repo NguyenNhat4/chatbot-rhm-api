@@ -91,7 +91,7 @@ class RetrieveFromKB(Node):
         results, score = exec_res
         shared["retrieved"] = results
         shared["retrieval_score"] = score
-        shared["need_clarify"] = score < 0.3
+        shared["need_clarify"] = score < get_score_threshold()
         
         # Always continue to next node via default edge (ScoreDecisionNode)
         input_type = shared.get("input_type", "medical_question")
@@ -162,71 +162,73 @@ class ComposeAnswer(Node):
 
 
 
-class TopicSuggestResponse(Node):
-    """Node xử lý gợi ý topic với template khác nhau cho từng context"""
+class ClarifyQuestionNode(Node):
+    """Node xử lý clarification cho medical questions có score thấp"""
     
     def prep(self, shared):
         role = shared.get("role", "")
         query = shared.get("query", "")
         retrieved = shared.get("retrieved", [])
-        logger.info(f"[TopicSuggestResponse] content retrieve: {retrieved}")
-        context = shared.get("response_context", "default") 
-        retrieval_score = shared.get("retrieval_score", 0.0)
-        return role, query, retrieved, context, retrieval_score
-    
+        keywords = shared.get("keywords", [])
+        logger.info(f"[ClarifyQuestion] PREP - Role: {role}, Query: '{query[:50]}...', Keywords: {keywords}")
+        return role, query, retrieved, keywords
     
     def exec(self, inputs):
-        role, query, retrieved, context, retrieval_score = inputs
-        result =    {
-            "explain": "",
-            "suggestion_questions" : [],
+        role, query, retrieved, keywords = inputs
+        logger.info(f"[ClarifyQuestion] EXEC - Generating clarification for low-score medical query")
+        
+        suggestion_questions = [q['cau_hoi'] for q in retrieve_random_by_role(role, amount=5)]
+        
+        result = {
+            "explain": "Có thể bạn đang muốn hỏi về một trong những vấn đề sau đây? Hãy chọn câu hỏi phù hợp hoặc diễn đạt lại câu hỏi của bạn nhé! 🤔",
+            "suggestion_questions": suggestion_questions,
             "preformatted": True,
         }
-        suggestion_questions = [q['cau_hoi'] for q in retrieve_random_by_role(role, amount=10)]
-        # Handle low-score medical questions specifically
-        if context == "medical_low_score":
-            logger.info(f"[TopicSuggestResponse] EXEC - Handling low-score medical query: '{query}'")
-            result["explain"] = "Hiện mình chưa tìm được câu trả lời trong dữ sẵn có. Bạn thông cảm nhé!. Mình có các hướng sau bạn có thể quan tâm."
         
-        if context == "topic_suggestion":
-            result["explain"] = "Mình gợi ý bạn các chủ đề sau nhé"
-        
-        result["suggestion_questions"] = suggestion_questions
-
+        logger.info(f"[ClarifyQuestion] EXEC - Generated {len(suggestion_questions)} clarification questions")
         return result
+    
+    def post(self, shared, prep_res, exec_res):
+        logger.info("[ClarifyQuestion] POST - Lưu clarification response")
+        shared["answer_obj"] = exec_res
+        shared["explain"] = exec_res.get("explain", "")
+        shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
+        return "default"
 
+
+class TopicSuggestResponse(Node):
+    """Node xử lý gợi ý topic khi user yêu cầu gợi ý chủ đề"""
+    
+    def prep(self, shared):
+        role = shared.get("role", "")
+        query = shared.get("query", "")
+        logger.info(f"[TopicSuggestResponse] PREP - Role: {role}, Query: '{query[:50]}...'")
+        return role, query
+    
+    def exec(self, inputs):
+        role, query = inputs
+        logger.info(f"[TopicSuggestResponse] EXEC - Generating topic suggestions for role: {role}")
+        
+        # Get 10 topic suggestions for exploration
+        suggestion_questions = [q['cau_hoi'] for q in retrieve_random_by_role(role, amount=10)]
+        
+        result = {
+            "explain": "Mình gợi ý bạn các chủ đề sau nhé! Bạn có thể chọn bất kỳ chủ đề nào mà bạn quan tâm 😊",
+            "suggestion_questions": suggestion_questions,
+            "preformatted": True,
+        }
+        
+        logger.info(f"[TopicSuggestResponse] EXEC - Generated {len(suggestion_questions)} topic suggestions")
+        return result
     
     def post(self, shared, prep_res, exec_res):
         logger.info("[TopicSuggestResponse] POST - Lưu topic suggestion response")
         shared["answer_obj"] = exec_res
         shared["explain"] = exec_res.get("explain", "")
-        shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])  # Lấy 3 đầu làm suggestions
+        shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
         return "default"
 
 
-
-class LogConversationNode(Node):
-    """Node để log cuộc trò chuyện user-bot vào file"""
-    
-    def prep(self, shared):
-        logger.info("[LogConversation] PREP - Chuẩn bị log conversation")
-        user_query = shared.get("query", "")
-        bot_answer = shared.get("answer", "")
-        return user_query, bot_answer
-    
-    def exec(self, inputs):
-        logger.info("[LogConversation] EXEC - Logging conversation to file")
-        user_query, bot_answer = inputs
-        
-        # Log the complete exchange
-        log_conversation_exchange(user_query, bot_answer)
-        
-        return {"logged": True, "user_query": user_query, "bot_answer": bot_answer}
-    
-    def post(self, shared, prep_res, exec_res):
-        logger.info(f"[LogConversation] POST - Logged conversation: user='{exec_res['user_query'][:50]}...' bot='{exec_res['bot_answer'][:50]}...'")
-        shared["conversation_logged"] = exec_res["logged"]
-        return "default"
 
 
 class MainDecisionAgent(Node):
@@ -244,7 +246,7 @@ class MainDecisionAgent(Node):
         prompt = PROMPT_CLASSIFY_INPUT.format(query=query, role=role)
         
         try:
-            resp = call_llm(prompt  )
+            resp = call_llm(prompt)
             logger.info(f"[MainDecision] EXEC - resp: {resp}")
             result = parse_yaml_with_schema(
                 resp,
@@ -275,8 +277,6 @@ class MainDecisionAgent(Node):
         
         if input_type == "medical_question":
             return "retrieve_kb"
-        elif input_type == "topic_suggestion":
-            return "retrieve_kb"
         elif input_type == "greeting":
             return "greeting"
         else:
@@ -300,12 +300,13 @@ class ScoreDecisionNode(Node):
         logger.info(f"[ScoreDecision] EXEC - Input: '{input_type}', Score: {retrieval_score:.4f}, Threshold: {score_threshold}")
         
         if input_type == "medical_question":
+
             if retrieval_score >= score_threshold:
                 return {"action": "compose_answer", "context": "medical_high_score"}
             else:
-                return {"action": "topic_suggest", "context": "medical_low_score"}
-        
-        return {"action": "topic_suggest", "context": "topic_suggestion"}
+                return {"action": "clarify", "context": "medical_low_score"}
+            
+        return {"action": "clarify", "context": "topic_suggestion"}
    
     def post(self, shared, prep_res, exec_res):
         shared["response_context"] = exec_res["context"]

@@ -1,7 +1,7 @@
 from pocketflow import Flow
 from nodes import (
     IngestQuery, MainDecisionAgent, ScoreDecisionNode, RetrieveFromKB, 
-    ComposeAnswer, TopicSuggestResponse,LogConversationNode, GreetingResponse
+    ComposeAnswer, TopicSuggestResponse, ClarifyQuestionNode, GreetingResponse
 )
 import logging
 
@@ -18,7 +18,7 @@ def create_med_agent_flow():
     score_decision = ScoreDecisionNode()
     compose_answer = ComposeAnswer()
     topic_suggest = TopicSuggestResponse()
-    log_conversation = LogConversationNode()
+    clarify_question = ClarifyQuestionNode()
     greeting = GreetingResponse()
     logger.info("[Flow] Kết nối nodes theo luồng mới")
     
@@ -35,13 +35,9 @@ def create_med_agent_flow():
     # From ScoreDecision, route to appropriate action
     score_decision - "compose_answer" >> compose_answer
     score_decision - "topic_suggest" >> topic_suggest
+    score_decision - "clarify" >> clarify_question
     
-    # After composing answer, suggest followups
-    compose_answer>> log_conversation
-    
-    # Both topic suggestion and followups go to logging
-    topic_suggest >> log_conversation
-    
+   
     flow = Flow(start=ingest)
     logger.info("[Flow] Medical agent flow với modular architecture đã được tạo thành công")
     return flow
