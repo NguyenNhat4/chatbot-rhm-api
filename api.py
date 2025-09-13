@@ -457,7 +457,7 @@ async def chat(
         )
 
         # Single transaction: create user_message, create bot_message, update thread timestamp
-        with db.begin():
+        try:
             db.add(user_message)
             db.add(bot_message)
 
@@ -465,14 +465,13 @@ async def chat(
             thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
             if thread:
                 thread.updated_at = datetime.now()
+            
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
 
-        # Log conversation in background (async)
-        background_tasks.add_task(
-            log_conversation_background,
-            request.message,
-            explanation,
-            request.session_id,
-        )
+     
 
         return response
 
