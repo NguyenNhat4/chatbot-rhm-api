@@ -451,7 +451,6 @@ async def chat(
             content=explanation,
             timestamp=datetime.now(),
             suggestions=suggestion_questions,
-            summary=explanation,
             need_clarify=need_clarify,
             input_type=input_type
         )
