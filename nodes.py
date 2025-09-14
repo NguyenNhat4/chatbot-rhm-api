@@ -272,7 +272,7 @@ class MainDecisionAgent(Node):
             logger.warning(f"[MainDecision] EXEC - LLM classification failed: {e}")
         
         # Default fallback
-        return {"type": "topic_suggestion", "confidence": "high", "rag_questions": []}
+        return {"type": "topic_suggest", "confidence": "high", "rag_questions": []}
     
     def post(self, shared, prep_res, exec_res):
         logger.info(f"[MainDecision] POST - Classification result: {exec_res}")
@@ -289,7 +289,7 @@ class MainDecisionAgent(Node):
         elif input_type == "greeting":
             return "greeting"
         else:
-            return "topic_suggestion"
+            return "topic_suggest"
 
 
 class ScoreDecisionNode(Node):
