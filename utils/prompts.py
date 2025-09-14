@@ -122,18 +122,16 @@ Danh sách Q&A đã retrieve:
 {relevant_info_from_kb}
 
 NHIỆM VỤ
-1) Chọn 1 cặp {{best_question, best_answer}} liên quan nhất tới input người dùng từ danh sách trên.
- 
-2) Soạn `explanation` ngắn gọn, trực tiếp:
-   - Giải thích dựa vào {{best_answer}}, nhấn mạnh từ quan trọng: **<từ quan trọng>**
-   - Độ dài tối đa 2-3 câu ngắn, ngôn từ phù hợp cho {audience}
-   - Xuống dòng, ghi: 👉 Tóm lại, <viết lại ngắn gọn dựa vào {{best_answer}}>
+1) Soạn `explanation` ngắn gọn, trực tiếp:
+   - Trả lời bằng cách dựa vào  Q&A đã retrieve, nhấn mạnh từ quan trọng: **<từ quan trọng>**
+   - Độ dài cố gắng đủ ý nhưng vẫn ngắn gọn , ngôn từ phù hợp cho {audience}
+   - Xuống dòng, ghi: 👉 Tóm lại, <viết lại ngắn gọn hơn nữa>
    - Có thể không cần viết phần tóm lại nếu câu trả lời đã đủ ngắn gọn.
-3) Soạn `questions`: viết lại các câu hỏi  LIÊN QUAN, không trùng {{best_question}}, rút từ các mục còn lại trong danh sách đã retrieve.
+2) Soạn `suggestion_questions` thì chọn từ danh sách Q&A ở trên.
 
-4) Trường hợp KHÔNG có mục nào đủ liên quan (hoặc danh sách trống):
-   - `explanation` = "Mình chưa đủ thông tin từ tư liệu hiện có để trả lời chính xác cho câu hỏi này. Bạn có thể đặt câu hỏi khác không." 
-   - `questions` = "có thể để rỗng").
+3) Trường hợp KHÔNG có mục nào đủ liên quan (hoặc danh sách trống):
+   - `explanation` = "Mình chưa  thông tin từ tư liệu hiện có để trả lời chính xác cho câu hỏi này. Bạn có thể đặt câu hỏi khác không." 
+ 
 
 YÊU CẦU PHONG CÁCH & AN TOÀN
 - **KHÔNG chào hỏi** (như "Chào bạn", "Bạn hỏi về..."), đi thẳng vào câu trả lời
