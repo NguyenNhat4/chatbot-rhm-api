@@ -85,7 +85,7 @@ class RetrieveFromKB(Node):
         import time
 
         start_time = time.time()
-        results, score = retrieve(search_term, user_role, top_k=4)
+        results, score = retrieve(search_term, user_role, top_k=7)
         elapsed_time = time.time() - start_time
 
         # Log elapsed time to a file
