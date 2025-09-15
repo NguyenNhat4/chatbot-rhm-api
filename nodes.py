@@ -12,7 +12,8 @@ from utils.prompts import (
 )
 from utils.helpers import (
     format_kb_qa_list,
-    get_score_threshold
+    get_score_threshold,
+    _format_conversation_history
 )
 from utils.role_ENUM import (
     PERSONA_BY_ROLE
@@ -137,13 +138,17 @@ class ComposeAnswer(Node):
         role, query, retrieved,  score, conversation_history = inputs
         persona = PERSONA_BY_ROLE[role]
         relevant_info_from_kb = format_kb_qa_list(retrieved, max_items=10)
+        
+        # Format conversation history
+        formatted_history = _format_conversation_history(conversation_history)
+        
         prompt = PROMPT_COMPOSE_ANSWER.format(
             ai_role=persona['persona'],
             audience=persona['audience'],
             tone=persona['tone'],
             query=query,
             relevant_info_from_kb=relevant_info_from_kb if relevant_info_from_kb else "Không có thông tin từ cơ sở tri thức",
-            conversation_history = conversation_history
+            conversation_history = formatted_history
         )
         logger.info(f"✍️ [ComposeAnswer] EXEC - prompt: {prompt}")
         result = call_llm(prompt)

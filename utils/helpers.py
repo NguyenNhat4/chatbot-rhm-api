@@ -108,6 +108,24 @@ def get_most_relevant_QA(hits: List[Dict[str, Any]]) -> str:
             return f"{q_part}A: {answer}".strip()
     # No answers found
     return ""
+def _format_conversation_history(conversation_history):
+    """Format conversation history from list of dicts to readable text"""
+    if not conversation_history:
+        return "Không có cuộc hội thoại trước đó"
+    
+    formatted_messages = []
+    for msg in conversation_history:
+        role = msg.get('role', '')
+        content = msg.get('content', '')
+        
+        if role == 'user':
+            formatted_messages.append(f"Người dùng: {content}")
+        elif role == 'bot':
+            formatted_messages.append(f"Bot: {content}")
+        else:
+            formatted_messages.append(f"{role}: {content}")
+    
+    return "\n".join(formatted_messages)
 
 
 def format_kb_qa_list(hits: List[Dict[str, Any]], max_items: int = 10) -> str:
