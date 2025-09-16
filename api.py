@@ -59,6 +59,28 @@ app = FastAPI(
     }
 )
 
+
+
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Startup event to load knowledge base
 @app.on_event("startup")
 async def startup_event():
@@ -97,6 +119,83 @@ app.add_middleware(
 
 # Create API router with prefix
 router = APIRouter(prefix="/api")
+
+
+
+
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    name: Optional[str] = None
+    avatar: Optional[str] = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserOut
+
+class GoogleLoginReq(BaseModel):
+    googleIdToken: str
+
+class LoginReq(BaseModel):
+    email: EmailStr
+    password: str
+
+class GoogleLoginReq(BaseModel):
+    googleIdToken: str
+
+
+@router.post("/auth/google", response_model=TokenResponse)
+def login_with_google(payload: GoogleLoginReq, db: Session = Depends(get_db)):
+    """
+    Login with Google ID token.
+    If user doesn't exist, create a new account automatically.
+    """
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            payload.googleIdToken, google_requests.Request(), os.getenv("GOOGLE_CLIENT_ID")
+        )
+        email = idinfo.get("email")
+        name = idinfo.get("name", "")
+        logger.info(f"Google login attempt for email: {email}, name: {name}")
+        if not email:
+            raise HTTPException(status_code=400, detail="Invalid Google token: missing email")
+
+        user = db.query(Users).filter(Users.email == email).first()
+        if not user:
+            random_password = uuid.uuid4().hex
+            hashed_password = bcrypt.hash(random_password)
+            user = Users(email=email, password=hashed_password)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+        token_data = {"sub": str(user.id)}
+        access_token = create_access_token(token_data)
+
+        return TokenResponse(
+            access_token=access_token,
+    token_type="bearer",
+    user=UserOut(
+        id=user.id,
+        email=user.email,
+        name= name,          # thêm tên
+        avatar=idinfo.get("picture", ""),  # thêm avatar từ Google token
+    ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Google token: {e}")
+    except ValueError as ve:
+        # Token verification failed
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {str(ve)}")
+    except Exception as e:
+        logger.error(f"Error in Google login: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+
 
 # Initialize the medical flow
 med_flow = create_med_agent_flow()
@@ -162,7 +261,9 @@ class LoginReq(BaseModel):
 
 class UserOut(BaseModel):
     id: int
-    email: EmailStr
+    email: str
+    name: Optional[str] = None
+    avatar: Optional[str] = None
     
 class TokenResponse(BaseModel):
     access_token: str
