@@ -43,7 +43,7 @@ NHIỆM VỤ
 1) Soạn `explanation` ngắn gọn, trực tiếp, dựa vào Q&A đã retrieve; có thể nhấn mạnh **từ quan trọng** nếu cần.
    - Văn phong phù hợp cho {audience}, giọng {tone}.
    - Kết thúc bằng một dòng tóm lược bắt đầu bằng “👉 Tóm lại,”.
-2) `suggestion_questions` lấy NGUYÊN VĂN từ danh sách Q&A ở trên (3–5 câu), ưu tiên sát chủ đề nhất.
+2) `suggestion_questions` lấy NGUYÊN VĂN từ danh sách Q&A ở trên (3–5 câu), ưu tiên sát chủ đề nhất và nó phải khác câu hỏi hiện tại.
 3) Nếu Q&A ít/liên quan thấp, vẫn trả lời thật ngắn gọn dựa phần liên quan nhất.
 
 YÊU CẦU PHONG CÁCH & AN TOÀN

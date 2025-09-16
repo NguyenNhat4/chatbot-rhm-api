@@ -101,7 +101,7 @@ def serialize_conversation_history(messages):
         })
     return conversation_history
 
-def _format_conversation_history(conversation_history):
+def format_conversation_history(conversation_history):
     """Format conversation history from list of dicts to readable text"""
     if not conversation_history:
         return "Không có cuộc hội thoại trước đó"
