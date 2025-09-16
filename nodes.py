@@ -1,7 +1,7 @@
 from math import log
 from unittest import result
 from pocketflow import Node
-from utils.call_llm import call_llm
+from utils.call_llm import call_llm, APIOverloadException
 from utils.kb import retrieve, retrieve_random_by_role
 
 from utils.response_parser import parse_yaml_response, validate_yaml_structure, parse_yaml_with_schema
@@ -167,23 +167,30 @@ class ComposeAnswer(Node):
         )
         logger.info(f"✍️ [ComposeAnswer] EXEC - prompt: {prompt}")
         
-        start_time = time.time()
-        result = call_llm(prompt)
-        end_time = time.time()
-        
-        # Log LLM timing
-        log_llm_timing("ComposeAnswer", start_time, end_time, len(prompt))
-        
-        logger.info(f"✍️ [ComposeAnswer] EXEC - LLM response received")
-        result = parse_yaml_with_schema(result, required_fields=["explanation", "suggestion_questions"], field_types={"explanation": str, "suggestion_questions": list})
-        logger.info(f"✍️ [ComposeAnswer] EXEC - result: {result}")
+        try:
+            start_time = time.time()
+            result = call_llm(prompt)
+            end_time = time.time()
+            
+            # Log LLM timing
+            log_llm_timing("ComposeAnswer", start_time, end_time, len(prompt))
+            
+            logger.info(f"✍️ [ComposeAnswer] EXEC - LLM response received")
+            result = parse_yaml_with_schema(result, required_fields=["explanation", "suggestion_questions"], field_types={"explanation": str, "suggestion_questions": list})
+            logger.info(f"✍️ [ComposeAnswer] EXEC - result: {result}")
 
-        if not result or  isinstance(result, str):
-            logger.warning("[ComposeAnswer] EXEC - Invalid LLM response, using fallback")
-            resp = "Xin lỗi, tôi không thể tạo câu trả lời phù hợp lúc này. Bạn đặt câu hỏi khác được không? "
-            return {"explain": resp, "suggestion_questions": [], "preformatted": True}
+            if not result or  isinstance(result, str):
+                logger.warning("[ComposeAnswer] EXEC - Invalid LLM response, using fallback")
+                resp = "Xin lỗi, tôi không thể tạo câu trả lời phù hợp lúc này. Bạn đặt câu hỏi khác được không? "
+                return {"explain": resp, "suggestion_questions": [], "preformatted": True}
+            
+            return {"explain": result.get("explanation", ""), "suggestion_questions": result.get("suggestion_questions", []), "preformatted": True}
         
-        return {"explain": result.get("explanation", ""), "suggestion_questions": result.get("suggestion_questions", []), "preformatted": True}
+        except APIOverloadException as e:
+            logger.warning(f"✍️ [ComposeAnswer] EXEC - API overloaded, triggering fallback mode: {e}")
+            # Return flag to indicate API overload - will be handled in post method
+            resp = "API hiện đang quá tải, đang chuyển sang chế độ fallback..."
+            return {"explain": resp, "suggestion_questions": [], "preformatted": True, "api_overload": True}
 
 
     def post(self, shared, prep_res, exec_res):
@@ -193,6 +200,12 @@ class ComposeAnswer(Node):
         shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
         logger.info(f"✍️ [ComposeAnswer] POST - Answer keys: {list(exec_res.keys())}")
         logger.info(f"✍️ [ComposeAnswer] POST - Answer preview: {exec_res.get('explain')}")
+        
+        # Check if API overload occurred and route to fallback
+        if exec_res.get("api_overload", False):
+            logger.info("✍️ [ComposeAnswer] POST - API overloaded, routing to fallback")
+            return "fallback"
+        
         return "default"
 
 
@@ -239,7 +252,6 @@ class ClarifyQuestionNode(Node):
 
 class TopicSuggestResponse(Node):
     """Node xử lý gợi ý topic khi user yêu cầu gợi ý chủ đề"""
-    
     def prep(self, shared):
         role = shared.get("role", "")
         query = shared.get("query", "")
@@ -306,11 +318,13 @@ class MainDecisionAgent(Node):
             if result:
                 logger.info(f"[MainDecision] EXEC - LLM classification: {result}")
                 return result       
+        except APIOverloadException as e:
+            logger.warning(f"[MainDecision] EXEC - API overloaded, triggering fallback: {e}")
+            return {"type": "api_overload", "confidence": "high", "rag_questions": []}
         except Exception as e:
             logger.warning(f"[MainDecision] EXEC - LLM classification failed: {e}")
         
-        # Default fallback
-        return {"type": "topic_suggest", "confidence": "high", "rag_questions": []}
+        return {"type": "default", "confidence": "high", "rag_questions": []}
     
     def post(self, shared, prep_res, exec_res):
         logger.info(f"[MainDecision] POST - Classification result: {exec_res}")
@@ -326,8 +340,83 @@ class MainDecisionAgent(Node):
             return "retrieve_kb"
         elif input_type == "greeting":
             return "greeting"
+        elif input_type == "api_overload" or input_type == "default":
+            return "fallback"
         else:
             return "topic_suggest"
+
+
+class FallbackNode(Node):
+    """Node fallback khi API quá tải - retrieve query và trả kết quả dựa trên score"""
+    
+    def prep(self, shared):
+        logger.info("🔄 [FallbackNode] PREP - Xử lý fallback khi API quá tải")
+        query = shared.get("query", "")
+        role = shared.get("role", "")
+        return query, role
+    
+    def exec(self, inputs):
+        query, role = inputs
+        logger.info(f"🔄 [FallbackNode] EXEC - Retrieve từ query: '{query[:50]}...' cho role: {role}")
+        
+        try:
+            # Retrieve từ knowledge base
+            results, score = retrieve(query, role, top_k=5)
+            logger.info(f"🔄 [FallbackNode] EXEC - Retrieved {len(results)} results, best score: {score:.4f}")
+            logger.info(f"🔄 [FallbackNode] EXEC - Results: {results}")
+            # Kiểm tra score threshold
+            if score > 0.5:
+                # Có kết quả tốt - lấy câu trả lời có score cao nhất
+                best_answer = results[0] if results else None
+                if best_answer:
+                    explain = best_answer.get("cau_tra_loi", "")
+                    # Lấy thêm câu hỏi gợi ý từ kết quả retrieve
+                    suggestion_questions = [item.get('cau_hoi', '') for item in results[1:4] if item.get('cau_hoi')]
+                else:
+                    explain = "Xin lỗi, không thể lấy được thông tin phù hợp lúc này."
+                    suggestion_questions = []
+            else:
+                # Score thấp - trả về thông báo mặc định + câu hỏi gợi ý từ retrieve
+                explain = "Hiện tại mình chưa có đủ thông tin liên quan để trả lời câu hỏi này của bạn, Bạn có thể đặt lại câu hỏi khác hoặc diễn đạt lại câu hỏi của bạn! Hoặc bạn có thể chọn các câu hỏi gợi ý dưới đây!"
+                # Lấy câu hỏi gợi ý từ kết quả retrieve (nếu có), fallback sang random nếu không có
+                if results and len(results) > 0:
+                    suggestion_questions = [item.get('cau_hoi', '') for item in results if item.get('cau_hoi')][:5]
+                    # Nếu không đủ câu hỏi từ retrieve, bổ sung thêm từ random
+                    if len(suggestion_questions) < 3:
+                        random_questions = retrieve_random_by_role(role, amount=5-len(suggestion_questions))
+                        suggestion_questions.extend([q['cau_hoi'] for q in random_questions])
+                else:
+                    # Không có kết quả retrieve, dùng random
+                    random_questions = retrieve_random_by_role(role, amount=5)
+                    suggestion_questions = [q['cau_hoi'] for q in random_questions]
+            
+            result = {
+                "explain": explain,
+                "suggestion_questions": suggestion_questions,
+                "retrieval_score": score,
+                "preformatted": True
+            }
+            
+            logger.info(f"🔄 [FallbackNode] EXEC - Generated response with {len(suggestion_questions)} suggestions")
+            return result
+            
+        except Exception as e:
+            logger.error(f"🔄 [FallbackNode] EXEC - Error during fallback: {e}")
+            # Fallback tối thiểu
+            return {
+                "explain": "Xin lỗi, hệ thống đang gặp sự cố. Vui lòng thử lại sau.",
+                "suggestion_questions": [],
+                "retrieval_score": 0.0,
+                "preformatted": True
+            }
+    
+    def post(self, shared, prep_res, exec_res):
+        logger.info("🔄 [FallbackNode] POST - Lưu fallback response")
+        shared["answer_obj"] = exec_res
+        shared["explain"] = exec_res.get("explain", "")
+        shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
+        shared["retrieval_score"] = exec_res.get("retrieval_score", 0.0)
+        return "default"
 
 
 class ScoreDecisionNode(Node):

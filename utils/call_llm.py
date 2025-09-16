@@ -8,6 +8,10 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 from google.genai import types
 
+class APIOverloadException(Exception):
+    """Exception raised when API is overloaded or quota exceeded"""
+    pass
+
 # Initialize client at module level to avoid overhead on each call
 api_key = os.getenv("GEMINI_API_KEY", "")
 if not api_key:
@@ -95,8 +99,22 @@ def call_llm(prompt: str, fast_mode: bool = True) -> str:
         return response_text or "Xin lỗi, không thể tạo response."
         
     except Exception as e:
-        logger.error(f"❌ Lỗi khi gọi LLM: {str(e)}")
-        raise
+        error_str = str(e)
+        logger.error(f"❌ Lỗi khi gọi LLM: {error_str}")
+        
+        # Handle quota exceeded and API overload specifically
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+            logger.warning("⚠️ Gemini API quota exceeded or overloaded. Triggering fallback mode.")
+            raise APIOverloadException("API quota exceeded")
+        
+        # Handle other API errors
+        if "500" in error_str or "503" in error_str or "overload" in error_str.lower():
+            logger.warning("⚠️ API server overloaded. Triggering fallback mode.")
+            raise APIOverloadException("API server overloaded")
+        
+        # For other errors, still return fallback message instead of raising
+        logger.warning("⚠️ Unexpected API error. Using fallback response.")
+        return "Xin lỗi hiện tại mình đang bị quá tải bạn chờ một chút nhé."
 
 if __name__ == "__main__":
     test_prompt = "Hello, how are you?"

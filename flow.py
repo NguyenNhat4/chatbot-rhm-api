@@ -1,7 +1,7 @@
 from pocketflow import Flow
 from nodes import (
     IngestQuery, MainDecisionAgent, ScoreDecisionNode, RetrieveFromKB, 
-    ComposeAnswer, TopicSuggestResponse, ClarifyQuestionNode, GreetingResponse
+    ComposeAnswer, TopicSuggestResponse, ClarifyQuestionNode, GreetingResponse, FallbackNode
 )
 import logging
 
@@ -20,6 +20,7 @@ def create_med_agent_flow():
     topic_suggest = TopicSuggestResponse()
     clarify_question = ClarifyQuestionNode()
     greeting = GreetingResponse()
+    fallback = FallbackNode()
     logger.info("[Flow] Kết nối nodes theo luồng mới")
     
     # Main flow: Ingest → MainDecision
@@ -29,6 +30,7 @@ def create_med_agent_flow():
     main_decision - "retrieve_kb" >> retrieve_kb
     main_decision - "topic_suggest" >> topic_suggest
     main_decision - "greeting" >> greeting
+    main_decision - "fallback" >> fallback
     # From RetrieveKB, check score and decide
     retrieve_kb >> score_decision
     
@@ -36,6 +38,9 @@ def create_med_agent_flow():
     score_decision - "compose_answer" >> compose_answer
     score_decision - "topic_suggest" >> topic_suggest
     score_decision - "clarify" >> clarify_question
+    
+    # From ComposeAnswer, route to fallback if API overloaded
+    compose_answer - "fallback" >> fallback
     
    
     flow = Flow(start=ingest)
