@@ -19,7 +19,8 @@ class ChatConfig:
     MAX_THREAD_NAME_LENGTH: int = 255
     
     # Default messages
-    DEFAULT_WELCOME_MESSAGE: str = "Xin chào! Tôi là trợ lý AI của bạn. Rất vui được hỗ trợ bạn - Bạn cần tôi giúp gì hôm nay?"
+                     
+    DEFAULT_WELCOME_MESSAGE: str = "Xin chào 😊! Tôi là trợ lý AI của bạn. Rất vui được hỗ trợ bạn - Bạn cần tôi giúp gì hôm nay?"
     
     @classmethod
     def get_welcome_message(cls) -> str:
