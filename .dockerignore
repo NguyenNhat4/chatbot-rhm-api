@@ -26,6 +26,9 @@ wheels/
 *.egg
 MANIFEST
 
+# Exclude uppercase Python files (case sensitivity issues)
+*.PY
+
 # Virtual environments
 .env
 .venv
