@@ -13,13 +13,13 @@ flowchart TD
     retrieve --> score[ScoreDecisionNode]
     
     score -->|compose_answer| compose[ComposeAnswer]
-    score -->|topic_suggest| topic
+
     score -->|clarify| clarify[ClarifyQuestionNode]
     
-    compose --> log[LogConversationNode]
-    topic --> log
-    clarify --> log
-    greeting --> log
+    compose --> End
+    topic --> End
+    clarify --> End
+    greeting --> End
 ```
 
 ## Key Changes Made
