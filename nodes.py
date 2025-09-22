@@ -135,12 +135,7 @@ class ChitChatRespond(Node):
 
         # Gợi ý chuyên môn theo vai trò bác sĩ
         role_lower = (role or '').lower()
-        if 'doctor_dental' in role_lower:
-            role_hint = 'Lưu ý đến mối liên hệ với nội tiết/chuyển hóa (ví dụ đái tháo đường) khi tư vấn sức khỏe răng miệng.'
-        elif 'doctor_endocrine' in role_lower:
-            role_hint = 'Lưu ý đến sức khỏe răng miệng (viêm nha chu, sâu răng) có thể ảnh hưởng kiểm soát đường huyết.'
-        else:
-            role_hint = 'Giữ phạm vi y khoa tổng quát, thân thiện, định hướng người dùng đặt câu hỏi rõ ràng hơn.'
+     
 
         prompt = PROMPT_CHITCHAT_RESPONSE.format(
             conversation_history=formatted_history,
@@ -148,8 +143,7 @@ class ChitChatRespond(Node):
             role=role,
             ai_role=ai_role,
             audience=audience,
-            tone=tone,
-            role_hint=role_hint,
+            tone=tone
         )
 
         try:

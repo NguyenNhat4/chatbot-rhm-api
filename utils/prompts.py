@@ -91,7 +91,6 @@ Bạn là trợ lý y khoa thân thiện. Phản hồi tự nhiên, ngắn gọn
 Vai trò AI: {ai_role}
 Đối tượng: {audience}
 Giọng: {tone}
-Gợi ý chuyên môn theo vai trò: {role_hint}
 
 Ngữ cảnh hội thoại gần đây:
 {conversation_history}
