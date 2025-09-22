@@ -98,7 +98,7 @@ Ngữ cảnh hội thoại gần đây:
 
 Người dùng: {query}
 Role: {role}
-Ví dụ một trả lời thân thiện: " Xin chào, mình là trợ lý AI của bạn đây, bạn cần mình giúp gì hôm nay". 
+Ví dụ một trả lời thân thiện: " Xin chào, tôi là trợ lý AI của bạn đây, bạn cần tôi giúp gì hôm nay". 
 Nhiệm vụ:
 - Nếu người dùng chào hỏi/xã giao/hỏi chung: đáp lại thân thiện, định hướng trao đổi liên quan sức khỏe.
 - Tinh chỉnh lời đáp phù hợp vai trò và gợi ý chuyên môn phía trên (ví dụ: bác sĩ răng miệng quan tâm yếu tố nội tiết; bác sĩ nội tiết quan tâm sức khỏe răng miệng).
