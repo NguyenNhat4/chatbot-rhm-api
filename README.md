@@ -19,21 +19,74 @@
 3. **Bác sĩ nha khoa** (`doctor_dental`)
 4. **Bác sĩ nội tiết** (`doctor_endocrine`)
 
-## 🏗️ Kiến trúc hệ thống
+## 🚀 Chạy bằng Docker (dành cho frontend dev)
 
-### Luồng xử lý chính (PocketFlow)
+### 1) Chuẩn bị môi trường
+
+- Cài Docker và Docker Compose
+- Tạo file `.env` tại thư mục gốc, ví dụ:
+
+```
+API_HOST=0.0.0.0
+API_PORT=8000
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=chatbot
+POSTGRES_PORT=5432
+GEMINI_API_KEY=your_gemini_key
+```
+
+### 2) Khởi chạy backend API + Postgres
+
+```bash
+docker compose up -d --build
+```
+
+Đợi Postgres healthy, API sẽ tự start tại `http://localhost:8000`.
+
+### 3) Kiểm tra nhanh
+
+- Health: `http://localhost:8000/api/health`
+- Swagger: `http://localhost:8000/api/docs`
+
+### 4) Gọi API từ frontend
+
+- Endpoint chat: `POST /api/chat`
+- Body JSON:
+
+```json
+{
+  "message": "em bị ê buốt răng",
+  "role": "patient_dental",
+  "session_id": "<thread_id do FE quản lý>"
+}
+```
+
+Lưu ý:
+- Trước khi gọi chat cần tạo `thread` (session_id) bên phía DB của hệ thống (API hiện chỉ nhận `session_id` đã tồn tại và thuộc user).
+- Header Authorization: Bearer <token> (sau khi login qua `/api/auth/login` hoặc `/api/auth/token`).
+
+### 5) Dừng và xem logs
+
+```bash
+docker compose logs -f chatbot-rhm-api
+docker compose down
+```
+
+---
+
+## 🏗️ Kiến trúc hệ thống (tóm tắt)
 
 ```mermaid
 flowchart TD
     A[IngestQuery] --> B[MainDecisionAgent]
     B -->|medical_question| C[RetrieveFromKB]
-    B -->|greeting| D[GreetingResponse]
-    B -->|fallback| E[FallbackNode]
+    B -->|fallback| D[FallbackNode]
     C --> F[ScoreDecisionNode]
     F -->|score >= threshold| G[ComposeAnswer]
     F -->|score < threshold| H[ClarifyQuestionNode]
-    G -->|API overload| E
-    B -->|topic_suggest| I[TopicSuggestResponse]
+    G -->|API overload| D
+    B -->|chitchat| I[ChitChatRespond]
 ```
 
 ### Cấu trúc thư mục
@@ -148,7 +201,7 @@ uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 #### Các Nodes chính:
 
 1. **IngestQuery**: Xử lý input từ user
-2. **MainDecisionAgent**: Phân loại intent (greeting/medical_question/topic_suggest)
+2. **MainDecisionAgent**: Phân loại intent (greeting/medical_question/chitchat/topic_suggestion)
 3. **RetrieveFromKB**: Tìm kiếm trong knowledge base
 4. **ScoreDecisionNode**: Quyết định dựa trên relevance score
 5. **ComposeAnswer**: Tạo câu trả lời bằng LLM

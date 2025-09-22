@@ -8,25 +8,26 @@ flowchart TD
     
     %% Branches from MainDecisionAgent
     main -->|retrieve_kb| retrieve[RetrieveFromKB]
-    main -->|topic_suggest| topic[TopicSuggestResponse]
-    main -->|greeting| greeting[GreetingResponse]
+    %% main no longer routes directly to topic
+    %% greeting is merged into chitchat
+    main -->|chitchat| chitchat[ChitChatRespond]
     main -->|fallback| fallback[FallbackNode]
     
     %% Retrieval path
     retrieve --> score[ScoreDecisionNode]
     score -->|compose_answer| compose[ComposeAnswer]
     score -->|clarify| clarify[ClarifyQuestionNode]
-    score -->|topic_suggest| topic
     
     %% Compose may fallback on API overload
     compose -->|fallback| fallback
     
+    %% ChitChat is terminal for non-RAG
+    
     %% Terminal states
-    topic --> End
     clarify --> End
-    greeting --> End
     fallback --> End
     compose --> End
+    chitchat --> End
 ```
 
 ## Key Changes Made
@@ -42,17 +43,16 @@ flowchart TD
 - **After**: Low-score medical questions → "clarify" action
 - **Benefit**: Clear separation between clarification needs and topic exploration
 
-### 3. **Simplified TopicSuggestResponse**
-- **Before**: Handled both low-score medical and explicit topic requests
-- **After**: Only handles explicit topic suggestion requests
-- **Message**: "Mình gợi ý bạn các chủ đề sau nhé! Bạn có thể chọn bất kỳ chủ đề nào mà bạn quan tâm 😊"
-- **Questions**: Shows 10 topic suggestions for broad exploration
+### 3. **Removed TopicSuggestResponse**
+- **Before**: Handled explicit topic suggestion requests
+- **After**: Topic suggestions now handled through ChitChatRespond for better conversational flow
+- All topic-related requests now route through chitchat for more natural interaction
 
 ### 4. **Updated Flow Routing**
 - Thêm route mới: `score_decision - "clarify" >> clarify_question`
 - Thêm nhánh: `main_decision - "fallback" >> fallback`
-- Thêm cạnh: `score_decision - "topic_suggest" >> topic_suggest`
 - `compose_answer - "fallback" >> fallback` khi API quá tải
+ - Thêm nhánh mới: `main_decision - "chitchat" >> chitchat`, và `chitchat - "retrieve_kb" >> retrieve_kb` khi phát hiện câu hỏi mang tính thông tin.
 
 ## User Experience Improvements
 
