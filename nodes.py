@@ -15,7 +15,7 @@ from utils.helpers import (
     get_score_threshold,
     format_conversation_history
 )
-from utils.role_ENUM import (
+from utils.role_enum import (
     PERSONA_BY_ROLE
 )
 from typing import Any, Dict, List, Tuple

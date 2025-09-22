@@ -9,7 +9,7 @@ import yaml
 from .call_llm import call_llm
 from .kb import retrieve, retrieve_random_by_role
 from .response_parser import parse_yaml_response, validate_yaml_structure
-from .role_ENUM import RoleEnum
+from .role_enum import RoleEnum
 
 logger = logging.getLogger(__name__)
 

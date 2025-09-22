@@ -32,7 +32,7 @@ from utils.response_parser import (
     handle_statement_response,
 )
 from utils.helpers import serialize_conversation_history
-from utils.role_ENUM import RoleEnum, ROLE_DISPLAY_NAME, ROLE_DESCRIPTION
+from utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME, ROLE_DESCRIPTION
 
 # Load environment variables
 load_dotenv()

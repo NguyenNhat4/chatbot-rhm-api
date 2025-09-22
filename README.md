@@ -101,7 +101,7 @@ chatbot-rhm-api/
 │   ├── call_llm.py       # Gemini AI integration
 │   ├── kb.py             # Knowledge base search
 │   ├── prompts.py        # LLM prompts
-│   ├── role_ENUM.py      # User roles definition
+│   ├── role_enum.py      # User roles definition
 │   └── response_parser.py # YAML response parsing
 ├── 📁 services/          # Business logic
 │   └── chat_service.py   # Chat operations
@@ -245,7 +245,7 @@ Chỉnh sửa trong `utils/prompts.py`:
 
 ### 3. Thêm role mới
 
-1. Thêm vào `utils/role_ENUM.py`:
+1. Thêm vào `utils/role_enum.py`:
    ```python
    class RoleEnum(str, Enum):
        NEW_ROLE = "new_role"
