@@ -71,8 +71,8 @@ HỢP ĐỒNG ĐẦU RA (BẮT BUỘC)
 MẪU PHẢI THEO ĐÚNG (giữ nguyên cấu trúc và THỤT LỀ, chỉ thay nội dung <>):
 ```yaml
 explanation: |
-  < diễn giải giải thích câu tốt nhất trả lời súc tích , dựa trên Q&A; có thể dùng **nhấn mạnh** cho các từ khoá quan trọng>
-  👉 Tóm lại, < tóm lược ngắn gọn chọn 1 cái trong danh sách Q&A>
+  < diễn giải giải thích , trả lời súc tích , dựa trên Q&A; có thể dùng **nhấn mạnh** cho các từ khoá quan trọng>
+  👉 Tóm lại, < tóm lược ngắn gọn có thể dựa vào danh sách Q&A>
 suggestion_questions:
   - <câu hỏi gợi ý 1>
   - <câu hỏi gợi ý 2>

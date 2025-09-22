@@ -486,9 +486,9 @@ async def chat(
             ChatThread.user_id == user_id
         ).first()
 
-        # Lấy 3 message gần nhất của thread
+        # Lấy 3 cặp gần nhất (tối đa 6 messages: user-bot)
         if thread:
-            thread.messages = sorted(thread.messages, key=lambda m: m.timestamp, reverse=True)[:3][::-1]
+            thread.messages = sorted(thread.messages, key=lambda m: m.timestamp, reverse=True)[:6][::-1]
         if not thread:
             raise HTTPException(
                 status_code=404,

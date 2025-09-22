@@ -117,9 +117,9 @@ class ChitChatRespond(Node):
 
     def exec(self, inputs):
         role, query, conversation_history = inputs
-        # Lấy 3 tin gần nhất
+        # Lấy 3 cặp gần nhất (6 tin)
         history_lines = []
-        for msg in conversation_history[-3:]:
+        for msg in conversation_history[-6:]:
             try:
                 who = msg.get("role")
                 content = msg.get("content", "")
@@ -297,9 +297,9 @@ class MainDecisionAgent(Node):
         query = shared.get("query", "").strip()
         role = shared.get("role", "")
         conversation_history = shared.get("conversation_history", [])
-        # Lấy 3 tin gần nhất
+        # Lấy 3 cặp gần nhất (6 tin)
         history_lines = []
-        for msg in conversation_history[-3:]:
+        for msg in conversation_history[-6:]:
             try:
                 who = msg.get("role")
                 content = msg.get("content", "")
