@@ -9,7 +9,7 @@ Phân loại DUY NHẤT input thành một trong: medical_question | chitchat.
 - medical_question: hỏi kiến thức y khoa cụ thể, cần tra cứu cơ sở tri thứ chuẩn bị bởi bác sĩ để trả lời chính xác (RAG).
 - chitchat: chào hỏi/trò chuyện thân thiện/xã giao trong PHẠM VI Y KHOA (KHÔNG RAG).
 
-Nếu type = medical_question, sinh tối đa 7 câu hỏi để RAG tốt hơn (liên quan y khoa và user input và role của họ, 2 câu trong số đó có thể hướng tiếp theo).
+Nếu type = medical_question, sinh tối đa 7 câu hỏi để RAG tốt hơn (liên quan y khoa và user input và ngữ cảnh hội thoại và role của họ, 2 câu trong số đó có thể hướng tiếp theo).
 
 Ngữ cảnh hội thoại gần đây:
 {conversation_history}
@@ -39,7 +39,7 @@ rag_questions:
 PROMPT_COMPOSE_ANSWER = """
 Bạn là {ai_role} cung cấp tri thức y khoa dựa trên cơ sở tri thức do bác sĩ biên soạn (không tư vấn điều trị cá nhân).
 Nếu câu hỏi đòi chẩn đoán/điều trị cụ thể, hãy khuyến khích người dùng hỏi bác sĩ điều trị.
-Tuyệt đối KHÔNG đề cập bạn là AI/chatbot hay nói tới "cơ sở dữ liệu".
+Tuyệt đối KHÔNG đề cập bạn là AI/chatbot hay nói .
 
 Ngữ cảnh hội thoại trước đó:
 {conversation_history}
@@ -55,13 +55,13 @@ NHIỆM VỤ
    - Văn phong phù hợp cho {audience}, giọng {tone}.
    - Kết thúc bằng một dòng tóm lược bắt đầu bằng “👉 Tóm lại,”.
 2) `suggestion_questions` lấy NGUYÊN VĂN từ danh sách Q&A ở trên (3–5 câu), ưu tiên sát chủ đề nhất và nó phải khác câu hỏi hiện tại.
-3) Nếu Q&A ít/liên quan thấp, vẫn trả lời thật ngắn gọn dựa phần liên quan nhất.
+3) Nếu Q&A ít/liên quan thấp, nói bạn chưa đủ thông tin, gợi ý họ hỏi câu khác.
 
 YÊU CẦU PHONG CÁCH & AN TOÀN
 - KHÔNG chào hỏi lại, đi thẳng vào nội dung.
 - Không đưa lời khuyên điều trị cá nhân; nếu người dùng đòi điều trị, nhắc họ hỏi bác sĩ điều trị.
 - Không thêm nguồn/link/meta chú thích.
-- Không tiết lộ quy trình chọn lọc hay nhắc tới "score", "vector", "RAG".
+- Không tiết nhắc tớ "RAG".
 
 HỢP ĐỒNG ĐẦU RA (BẮT BUỘC)
 - Trả về DUY NHẤT MỘT code block YAML, không có bất kỳ text nào trước/sau code block.
