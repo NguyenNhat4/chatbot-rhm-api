@@ -145,7 +145,7 @@ def estimate_tokens(text: str) -> int:
 
 
 # Learn more about calling the LLM: https://the-pocket.github.io/PocketFlow/utility_function/llm.html
-def call_llm(prompt: str, fast_mode: bool = True) -> str:
+def call_llm(prompt: str, fast_mode: bool = False) -> str:
     logger.info("🤖 Bắt đầu gọi LLM...")
     
     # Log token count before API call
@@ -154,9 +154,9 @@ def call_llm(prompt: str, fast_mode: bool = True) -> str:
     
     # Dynamic model selection based on fast_mode
     if fast_mode:
-        model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-8b")  # Super fast
+        model = "gemini-1.5-flash-8b"  
     else:
-        model = os.getenv("GEMINI_MODEL_QUALITY", "gemini-2.5-flash")  # High quality
+        model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")  # High quality
     
     logger.info(f"🎯 Using model: {model}")
     

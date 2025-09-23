@@ -350,7 +350,7 @@ class MainDecisionAgent(Node):
         prompt = PROMPT_CLASSIFY_INPUT.format(query=query, role=role, conversation_history=formatted_history)
         
         try:
-            resp = call_llm(prompt)
+            resp = call_llm(prompt, fast_mode=True)
             
             
             logger.info(f"[MainDecision] EXEC - resp: {resp}")
