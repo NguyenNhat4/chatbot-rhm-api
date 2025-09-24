@@ -19,12 +19,43 @@
 3. **Bác sĩ nha khoa** (`doctor_dental`)
 4. **Bác sĩ nội tiết** (`doctor_endocrine`)
 
-## 🚀 Chạy bằng Docker (dành cho frontend dev)
+## 📋 Yêu cầu hệ thống
+
+### Phiên bản được hỗ trợ
+- **Python**: 3.11+ (khuyến nghị 3.11)
+- **PostgreSQL**: 15+
+- **Docker**: 20.10+ và Docker Compose v2
+- **Node.js**: 16+ (nếu cần frontend integration)
+
+### Cấu hình tối thiểu
+- **RAM**: 2GB+ (khuyến nghị 4GB)
+- **Storage**: 5GB+ trống
+- **CPU**: 2 cores+
+
+## 🚀 Chạy bằng Docker (khuyến nghị cho production)
+
+> 🎯 **Tốt nhất cho**: Deploy production, frontend developers, team collaboration
 
 ### 1) Chuẩn bị môi trường
 
-- Cài Docker và Docker Compose
-- Tạo file `.env` tại thư mục gốc, ví dụ:
+#### Cài đặt Docker
+```bash
+# Ubuntu/Debian
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+
+# Windows: Tải Docker Desktop
+# macOS: Tải Docker Desktop
+```
+
+#### Kiểm tra cài đặt
+```bash
+docker --version
+docker-compose --version
+```
+
+- Tạo file `.env` tại thư mục gốc:
 
 ```
 API_HOST=0.0.0.0
@@ -39,10 +70,39 @@ GEMINI_API_KEY=your_gemini_key
 ### 2) Khởi chạy backend API + Postgres
 
 ```bash
+# Khởi chạy tất cả services
 docker compose up -d --build
+
+# Kiểm tra status các containers
+docker compose ps
+
+# Xem logs real-time
+docker compose logs -f chatbot-rhm-api
 ```
 
-Đợi Postgres healthy, API sẽ tự start tại `http://localhost:8000`.
+**Quá trình khởi động:**
+1. PostgreSQL container khởi động và chạy health check
+2. API container đợi DB healthy rồi mới start
+3. API sẽ tự động tạo tables và sẵn sàng tại `http://localhost:8000`
+
+### 2.1) Quản lý Docker containers
+
+```bash
+# Xem status
+docker compose ps
+
+# Restart một service
+docker compose restart chatbot-rhm-api
+
+# Rebuild khi có thay đổi code
+docker compose up -d --build chatbot-rhm-api
+
+# Dừng tất cả
+docker compose down
+
+# Dừng và xóa volumes (⚠️ mất data)
+docker compose down -v
+```
 
 ### 3) Kiểm tra nhanh
 
@@ -66,12 +126,33 @@ Lưu ý:
 - Trước khi gọi chat cần tạo `thread` (session_id) bên phía DB của hệ thống (API hiện chỉ nhận `session_id` đã tồn tại và thuộc user).
 - Header Authorization: Bearer <token> (sau khi login qua `/api/auth/login` hoặc `/api/auth/token`).
 
-### 5) Dừng và xem logs
+### 5) Debugging Docker
 
 ```bash
-docker compose logs -f chatbot-rhm-api
-docker compose down
+# Xem logs của service cụ thể
+docker compose logs chatbot-rhm-api
+docker compose logs postgres
+
+# Truy cập vào container đang chạy
+docker compose exec chatbot-rhm-api bash
+docker compose exec postgres psql -U postgres -d chatbot
+
+# Xem thông tin chi tiết container
+docker compose exec chatbot-rhm-api python -c "import sys; print(sys.version)"
+
+# Kiểm tra network connectivity
+docker compose exec chatbot-rhm-api ping postgres
 ```
+
+### 6) Docker troubleshooting
+
+| Vấn đề | Giải pháp |
+|--------|-----------|
+| Port đã được sử dụng | `docker compose down` hoặc đổi port trong `.env` |
+| Container không khởi động | `docker compose logs <service_name>` |
+| API không connect được DB | Kiểm tra `DATABASE_URL` trong `.env` |
+| Build lỗi | `docker compose build --no-cache` |
+| Hết disk space | `docker system prune -a` |
 
 ---
 
@@ -121,60 +202,158 @@ chatbot-rhm-api/
 └── main.py               # Entry point
 ```
 
-## 🚀 Cài đặt và chạy dự án
+## 💻 Chạy với pip (khuyến nghị cho development)
 
-### 1. Cài đặt dependencies
+> 🎯 **Tốt nhất cho**: Local development, debugging, custom modifications
+
+### 1. Chuẩn bị Python environment
+
+#### Cài đặt Python 3.11
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install python3.11 python3.11-venv python3.11-dev
+
+# macOS với Homebrew
+brew install python@3.11
+
+# Windows: Tải từ python.org
+```
+
+#### Tạo virtual environment (khuyến nghị)
+```bash
+# Tạo venv
+python3.11 -m venv venv
+
+# Kích hoạt
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# Kiểm tra Python version
+python --version  # Phải là 3.11.x
+```
+
+### 2. Cài đặt dependencies
 
 ```bash
+# Upgrade pip trước
+pip install --upgrade pip
+
+# Cài đặt requirements
 pip install -r requirements.txt
+
+# Verification
+pip list | grep fastapi
 ```
+
+#### Chi tiết dependencies chính:
+
+| Package | Version | Mục đích |
+|---------|---------|----------|
+| `fastapi` | 0.111.0 | Web framework chính |
+| `uvicorn[standard]` | 0.30.0 | ASGI server |
+| `sqlalchemy` | 2.0.23 | ORM cho database |
+| `psycopg2-binary` | 2.9.9 | PostgreSQL adapter |
+| `google-genai` | 0.3.0 | Gemini AI integration |
+| `pocketflow` | 0.0.3 | AI workflow framework |
+| `pandas` | 2.2.2 | Data processing |
+| `scikit-learn` | 1.5.1 | TF-IDF vectorization |
+| `sentence-transformers` | 2.2.2 | Dense embeddings (optional) |
+| `passlib[bcrypt]` |  | Password hashing |
+| `python-jose[cryptography]` |  | JWT tokens |
 
 ### 2. Cấu hình environment variables
 
 Tạo file `.env`:
 
 ```env
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/dbname
+# Database (điều chỉnh theo cấu hình local)
+DATABASE_URL=postgresql://your_username:your_password@localhost:5432/chatbot
 
-# Gemini AI
+# Gemini AI (bắt buộc)
 GEMINI_API_KEY=your_gemini_api_key_here
-# Hoặc nhiều keys cách nhau bằng dấu phẩy:
+# Hoặc nhiều keys để tăng quota:
 GEMINI_API_KEYS=key1,key2,key3
 
-# Google OAuth (optional)
+# Google OAuth (tuỳ chọn)
 GOOGLE_CLIENT_ID=your_google_client_id
 
-# JWT Security
-SECRET_KEY=your_secret_key_here
+# JWT Security (tạo secret key mạnh)
+SECRET_KEY=your_very_long_random_secret_key_here
 
 # API Settings
 API_HOST=0.0.0.0
 API_PORT=8000
-DEBUG=false
+DEBUG=true  # Chỉ trong development
 ```
 
-### 3. Setup database
+### 5. Kiểm tra kết nối database
 
 ```bash
-# Tạo database PostgreSQL trước
-# Sau đó tables sẽ được tạo tự động khi chạy API
+# Test connection
+python -c "
+import os
+from sqlalchemy import create_engine
+from dotenv import load_dotenv
+load_dotenv()
+engine = create_engine(os.getenv('DATABASE_URL'))
+conn = engine.connect()
+print('✅ Database connection successful')
+conn.close()
+"
 ```
 
-### 4. Chạy API server
+### 6. Chạy API server
 
 ```bash
-# Development mode
+# Development mode với auto-reload
 python api.py
 
-# Hoặc với uvicorn
+# Hoặc với uvicorn trực tiếp
 uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+
+# Production mode (không dùng --reload)
+uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
-### 5. Truy cập API Documentation
+#### Monitoring server
+```bash
+# Kiểm tra server đã khởi động
+curl http://localhost:8000/api/health
+
+# Xem logs real-time
+tail -f logs/app.log  # Nếu có logging to file
+```
+
+### 7. Truy cập API Documentation
 
 - **Swagger UI**: http://localhost:8000/api/docs
 - **ReDoc**: http://localhost:8000/redoc
+
+### 8. Pip troubleshooting
+
+| Vấn đề | Giải pháp |
+|--------|-----------|
+| `pip install` lỗi | `pip install --upgrade pip setuptools wheel` |
+| Package conflict | Tạo fresh virtual environment |
+| PostgreSQL lỗi compilation | Cài `python3.11-dev` và `libpq-dev` |
+| Permission denied | Không dùng `sudo pip`, sử dụng virtual environment |
+| SSL certificate errors | `pip install --trusted-host pypi.org --trusted-host pypi.python.org` |
+
+## 🔄 So sánh Docker vs Pip
+
+| Tiêu chí | Docker | Pip |
+|----------|--------|-----|
+| **Setup time** | ⭐⭐⭐ Nhanh (5 phút) | ⭐⭐ Trung bình (15 phút) |
+| **Isolation** | ⭐⭐⭐ Hoàn toàn | ⭐⭐ Virtual env |
+| **Production ready** | ⭐⭐⭐ Sẵn sàng | ⭐ Cần config thêm |
+| **Development speed** | ⭐⭐ Rebuild cần thời gian | ⭐⭐⭐ Nhanh với --reload |
+| **Debugging** | ⭐⭐ Khó debug trong container | ⭐⭐⭐ IDE integration tốt |
+| **Dependency conflicts** | ⭐⭐⭐ Không có | ⭐⭐ Có thể xảy ra |
+| **Disk usage** | ⭐ ~2GB images | ⭐⭐⭐ ~500MB packages |
+
 
 ## 🔧 Các thành phần chính
 
