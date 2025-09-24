@@ -39,15 +39,7 @@
 ### 1) Chuẩn bị môi trường
 
 #### Cài đặt Docker
-```bash
-# Ubuntu/Debian
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
 
-# Windows: Tải Docker Desktop
-# macOS: Tải Docker Desktop
-```
 
 #### Kiểm tra cài đặt
 ```bash
@@ -65,6 +57,7 @@ POSTGRES_PASSWORD=postgres
 POSTGRES_DB=chatbot
 POSTGRES_PORT=5432
 GEMINI_API_KEY=your_gemini_key
+GEMINI_API_KEYS=key1,key2,..
 ```
 
 ### 2) Khởi chạy backend API + Postgres
@@ -144,16 +137,6 @@ docker compose exec chatbot-rhm-api python -c "import sys; print(sys.version)"
 docker compose exec chatbot-rhm-api ping postgres
 ```
 
-### 6) Docker troubleshooting
-
-| Vấn đề | Giải pháp |
-|--------|-----------|
-| Port đã được sử dụng | `docker compose down` hoặc đổi port trong `.env` |
-| Container không khởi động | `docker compose logs <service_name>` |
-| API không connect được DB | Kiểm tra `DATABASE_URL` trong `.env` |
-| Build lỗi | `docker compose build --no-cache` |
-| Hết disk space | `docker system prune -a` |
-
 ---
 
 ## 🏗️ Kiến trúc hệ thống (tóm tắt)
@@ -202,68 +185,6 @@ chatbot-rhm-api/
 └── main.py               # Entry point
 ```
 
-## 💻 Chạy với pip (khuyến nghị cho development)
-
-> 🎯 **Tốt nhất cho**: Local development, debugging, custom modifications
-
-### 1. Chuẩn bị Python environment
-
-#### Cài đặt Python 3.11
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install python3.11 python3.11-venv python3.11-dev
-
-# macOS với Homebrew
-brew install python@3.11
-
-# Windows: Tải từ python.org
-```
-
-#### Tạo virtual environment (khuyến nghị)
-```bash
-# Tạo venv
-python3.11 -m venv venv
-
-# Kích hoạt
-# Linux/macOS:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate
-
-# Kiểm tra Python version
-python --version  # Phải là 3.11.x
-```
-
-### 2. Cài đặt dependencies
-
-```bash
-# Upgrade pip trước
-pip install --upgrade pip
-
-# Cài đặt requirements
-pip install -r requirements.txt
-
-# Verification
-pip list | grep fastapi
-```
-
-#### Chi tiết dependencies chính:
-
-| Package | Version | Mục đích |
-|---------|---------|----------|
-| `fastapi` | 0.111.0 | Web framework chính |
-| `uvicorn[standard]` | 0.30.0 | ASGI server |
-| `sqlalchemy` | 2.0.23 | ORM cho database |
-| `psycopg2-binary` | 2.9.9 | PostgreSQL adapter |
-| `google-genai` | 0.3.0 | Gemini AI integration |
-| `pocketflow` | 0.0.3 | AI workflow framework |
-| `pandas` | 2.2.2 | Data processing |
-| `scikit-learn` | 1.5.1 | TF-IDF vectorization |
-| `sentence-transformers` | 2.2.2 | Dense embeddings (optional) |
-| `passlib[bcrypt]` |  | Password hashing |
-| `python-jose[cryptography]` |  | JWT tokens |
-
 ### 2. Cấu hình environment variables
 
 Tạo file `.env`:
@@ -305,54 +226,12 @@ conn.close()
 "
 ```
 
-### 6. Chạy API server
 
-```bash
-# Development mode với auto-reload
-python api.py
-
-# Hoặc với uvicorn trực tiếp
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-
-# Production mode (không dùng --reload)
-uvicorn api:app --host 0.0.0.0 --port 8000
-```
-
-#### Monitoring server
-```bash
-# Kiểm tra server đã khởi động
-curl http://localhost:8000/api/health
-
-# Xem logs real-time
-tail -f logs/app.log  # Nếu có logging to file
-```
 
 ### 7. Truy cập API Documentation
 
 - **Swagger UI**: http://localhost:8000/api/docs
 - **ReDoc**: http://localhost:8000/redoc
-
-### 8. Pip troubleshooting
-
-| Vấn đề | Giải pháp |
-|--------|-----------|
-| `pip install` lỗi | `pip install --upgrade pip setuptools wheel` |
-| Package conflict | Tạo fresh virtual environment |
-| PostgreSQL lỗi compilation | Cài `python3.11-dev` và `libpq-dev` |
-| Permission denied | Không dùng `sudo pip`, sử dụng virtual environment |
-| SSL certificate errors | `pip install --trusted-host pypi.org --trusted-host pypi.python.org` |
-
-## 🔄 So sánh Docker vs Pip
-
-| Tiêu chí | Docker | Pip |
-|----------|--------|-----|
-| **Setup time** | ⭐⭐⭐ Nhanh (5 phút) | ⭐⭐ Trung bình (15 phút) |
-| **Isolation** | ⭐⭐⭐ Hoàn toàn | ⭐⭐ Virtual env |
-| **Production ready** | ⭐⭐⭐ Sẵn sàng | ⭐ Cần config thêm |
-| **Development speed** | ⭐⭐ Rebuild cần thời gian | ⭐⭐⭐ Nhanh với --reload |
-| **Debugging** | ⭐⭐ Khó debug trong container | ⭐⭐⭐ IDE integration tốt |
-| **Dependency conflicts** | ⭐⭐⭐ Không có | ⭐⭐ Có thể xảy ra |
-| **Disk usage** | ⭐ ~2GB images | ⭐⭐⭐ ~500MB packages |
 
 
 ## 🔧 Các thành phần chính
@@ -402,97 +281,6 @@ tail -f logs/app.log  # Nếu có logging to file
 - **Token estimation**: Ước tính tokens cho logging
 - **Error handling**: Graceful fallback khi all keys fail
 
-## 📝 Quy trình phát triển
-
-### 1. Thêm feature mới
-
-#### Thêm API endpoint mới:
-1. Tạo schema trong `schemas/chat_schemas.py`
-2. Thêm business logic trong `services/chat_service.py`
-3. Tạo endpoint trong `api.py` hoặc `chat_routes.py`
-
-#### Thêm node mới vào flow:
-1. Implement node class trong `nodes.py`
-2. Kết nối node trong `flow.py`
-3. Test với `flow.run(shared_data)`
-
-### 2. Modify prompts
-
-Chỉnh sửa trong `utils/prompts.py`:
-- `PROMPT_CLASSIFY_INPUT`: Phân loại intent
-- `PROMPT_COMPOSE_ANSWER`: Tạo câu trả lời
-
-### 3. Thêm role mới
-
-1. Thêm vào `utils/role_enum.py`:
-   ```python
-   class RoleEnum(str, Enum):
-       NEW_ROLE = "new_role"
-   ```
-
-2. Thêm CSV file tương ứng vào `medical_knowledge_base/`
-
-3. Cập nhật mapping trong `utils/kb.py`:
-   ```python
-   ROLE_TO_CSV = {
-       RoleEnum.NEW_ROLE.value: "new_role.csv",
-   }
-   ```
-
-### 4. Database migration
-
-Khi thay đổi models trong `database/models.py`:
-```bash
-# Tạo migration
-alembic revision --autogenerate -m "Add new field"
-
-# Apply migration  
-alembic upgrade head
-```
-
-## 🧪 Testing & Debugging
-
-### 1. Test individual components
-
-```python
-# Test knowledge base
-from utils.kb import retrieve
-results, score = retrieve("đau răng", "patient_dental", top_k=3)
-
-# Test LLM
-from utils.call_llm import call_llm
-response = call_llm("Hello, how are you?")
-
-# Test flow
-from flow import create_med_agent_flow
-flow = create_med_agent_flow()
-shared = {"role": "patient_dental", "input": "Tôi bị đau răng"}
-flow.run(shared)
-print(shared["explain"])
-```
-
-### 2. API Testing
-
-```bash
-# Test authentication
-curl -X POST "http://localhost:8000/api/auth/login" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "test@test.com", "password": "password"}'
-
-# Test chat
-curl -X POST "http://localhost:8000/api/chat" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Tôi bị đau răng", "role": "patient_dental", "session_id": "thread_id"}'
-```
-
-### 3. Debug logs
-
-Logs được ghi chi tiết trong console. Quan trọng:
-- `🔍 [IngestQuery]` - Input processing
-- `📚 [RetrieveFromKB]` - Knowledge base search
-- `✍️ [ComposeAnswer]` - LLM response generation
-- `🤖 [call_llm]` - API calls
 
 ## ⚠️ Lưu ý quan trọng
 
@@ -520,15 +308,6 @@ Logs được ghi chi tiết trong console. Quan trọng:
 
 ## 🆘 Troubleshooting thường gặp
 
-### 1. API không start được
-```bash
-# Kiểm tra environment variables
-python -c "import os; print(os.getenv('DATABASE_URL'))"
-
-# Kiểm tra database connection
-python check_db.py
-```
-
 ### 2. Knowledge base không load
 ```bash
 # Kiểm tra CSV files
@@ -546,31 +325,3 @@ python -c "from utils.call_llm import get_api_key_status; print(get_api_key_stat
 # Test LLM directly
 python utils/call_llm.py
 ```
-
-### 4. Flow lỗi
-```bash
-# Test individual nodes
-python -c "
-from nodes import IngestQuery
-from flow import create_med_agent_flow
-shared = {'role': 'patient_dental', 'input': 'test'}
-flow = create_med_agent_flow()
-flow.run(shared)
-print(shared)
-"
-```
-
-## 📞 Hỗ trợ
-
-Khi gặp vấn đề:
-1. Kiểm tra logs trong console
-2. Verify environment variables
-3. Test individual components trước
-4. Kiểm tra database connection
-5. Confirm API keys còn quota
-
----
-
-**Happy coding! 🚀**
-
-> Tài liệu này đảm bảo bạn có thể hiểu và làm việc với codebase ngay lập tức. Nếu có thắc mắc gì, hãy đọc code trong các file tương ứng để hiểu chi tiết hơn.
