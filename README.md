@@ -12,12 +12,14 @@
 - **Gemini AI**: LLM engine để xử lý câu hỏi
 - **TF-IDF + Vector Search**: Tìm kiếm trong knowledge base
 
-### 🎭 Các vai trò người dùng
+### 🎭 Các vai trò người dùng để set field role cho route /chat tương ứng
 
 1. **Bệnh nhân nha khoa** (`patient_dental`)
 2. **Bệnh nhân đái tháo đường** (`patient_diabetes`) 
 3. **Bác sĩ nha khoa** (`doctor_dental`)
 4. **Bác sĩ nội tiết** (`doctor_endocrine`)
+5. **Bác sĩ chỉnh nha** (`orthodontist`)  <- dùng cho cái web, 3 cái trên dùng cho app 
+
 
 ## 📋 Yêu cầu hệ thống
 
