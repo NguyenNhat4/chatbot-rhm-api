@@ -39,19 +39,25 @@ def main():
         host = os.getenv("API_HOST", "127.0.0.1")
         port = int(os.getenv("API_PORT", "8000"))
         debug = os.getenv("DEBUG", "false").lower() == "true"
+        # Auto-reload by default for development, can be disabled with RELOAD=false
+        reload_enabled = os.getenv("RELOAD", "true").lower() == "true"
         
         logger.info("🚀 Starting Medical Conversation API...")
         logger.info(f"🌐 Server: http://{host}:{port}")
         logger.info(f"📖 API Docs: http://{host}:{port}/docs")
         logger.info(f"📋 ReDoc: http://{host}:{port}/redoc")
+        if reload_enabled:
+            logger.info("🔄 Auto-reload enabled - server will restart on code changes")
         logger.info("🛑 Press Ctrl+C to stop the server")
         
-        # Start the server
+        # Start the server with auto-reload
         uvicorn.run(
             "api:app",
             host=host,
             port=port,
-            reload=debug,
+            reload=reload_enabled,
+            reload_dirs=[".", "utils", "database", "services"],  # Watch these directories
+            reload_excludes=["*.log", "*.db", "__pycache__", ".git"],  # Ignore these
             log_level="info"
         )
         

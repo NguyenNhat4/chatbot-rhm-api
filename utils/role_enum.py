@@ -7,6 +7,7 @@ class RoleEnum(str, Enum):
     PATIENT_DIABETES = "patient_diabetes"
     DOCTOR_DENTAL = "doctor_dental"
     DOCTOR_ENDOCRINE = "doctor_endocrine"
+    ORTHODONTIST = "orthodontist"
 
 
 ROLE_DISPLAY_NAME: Dict[RoleEnum, str] = {
@@ -14,6 +15,7 @@ ROLE_DISPLAY_NAME: Dict[RoleEnum, str] = {
     RoleEnum.PATIENT_DIABETES: "Bệnh nhân đái tháo đường",
     RoleEnum.DOCTOR_DENTAL: "Bác sĩ nha khoa",
     RoleEnum.DOCTOR_ENDOCRINE: "Bác sĩ nội tiết",
+    RoleEnum.ORTHODONTIST: "Bác sĩ chỉnh nha",
 }
 
 ROLE_DESCRIPTION: Dict[RoleEnum, str] = {
@@ -21,6 +23,7 @@ ROLE_DESCRIPTION: Dict[RoleEnum, str] = {
     RoleEnum.PATIENT_DIABETES: "Dành cho người mắc đái tháo đường cần tư vấn về mối liên hệ giữa bệnh đái tháo đường và sức khỏe răng miệng",
     RoleEnum.DOCTOR_DENTAL: "Dành cho bác sĩ nha khoa cần tư vấn về tác động của đái tháo đường đến điều trị nha khoa",
     RoleEnum.DOCTOR_ENDOCRINE: "Dành cho bác sĩ nội tiết cần hiểu về biến chứng răng miệng ở bệnh nhân đái tháo đường",
+    RoleEnum.ORTHODONTIST: "Dành cho bác sĩ chỉnh nha cần tham khảo kiến thức y khoa liên quan nha khoa",
 }
 PERSONA_BY_ROLE: Dict[str, Dict[str, str]] = {
     RoleEnum.DOCTOR_DENTAL.value: {
@@ -49,6 +52,13 @@ PERSONA_BY_ROLE: Dict[str, Dict[str, str]] = {
         "audience": "bệnh nhân nha khoa",
         "tone": (
             "Thái độ thân thiện, Ngôn ngữ thân thiện, không  dùng từ chuyên môn"
+        ),
+    },
+    RoleEnum.ORTHODONTIST.value: {
+        "persona": "Bác sĩ chỉnh nha",
+        "audience": "bác sĩ nha khoa (chỉnh nha)",
+        "tone": (
+            "Chính xác, súc tích, tập trung bằng chứng; tránh dài dòng; phù hợp đồng nghiệp chuyên môn"
         ),
     },
 }

@@ -1,8 +1,12 @@
 from pocketflow import Flow
 from nodes import (
     IngestQuery, MainDecisionAgent, ScoreDecisionNode, RetrieveFromKB, 
-    ComposeAnswer, ClarifyQuestionNode, GreetingResponse, FallbackNode,
-    ChitChatRespond,
+    ComposeAnswer, ClarifyQuestionNode, GreetingResponse, FallbackNode, ChitChatRespond,
+    # OQA
+)
+from OQA_nodes import (
+    OQAIngestDefaults, OQAClassifyEN, OQARetrieve, 
+    OQAComposeAnswerVIWithSources, OQAClarify, OQAChitChat
 )
 import logging
 
@@ -52,4 +56,32 @@ def create_med_agent_flow():
     logger.info("[Flow] Medical agent flow với modular architecture đã được tạo thành công")
     return flow
 
+
+
+def create_oqa_orthodontist_flow():
+    logger.info("[Flow] Tạo OQA orthodontist flow với nodes độc lập")
+
+    # Create independent OQA nodes (no reuse from old flow)
+    ingest = OQAIngestDefaults()
+    classify = OQAClassifyEN()
+    retrieve = OQARetrieve()
+    score = ScoreDecisionNode()  # Only reuse ScoreDecisionNode as it's generic
+    compose = OQAComposeAnswerVIWithSources()
+    clarify = OQAClarify()
+    chitchat = OQAChitChat()  # OQA-specific chitchat
+
+    # Wire the flow (no fallback node)
+    ingest >> classify
+    classify - "retrieve_kb" >> retrieve
+    classify - "chitchat" >> chitchat
+
+    retrieve >> score
+    score - "compose_answer" >> compose
+    score - "clarify" >> clarify
+
+    # All terminal nodes (no fallback routing)
+    
+    flow = Flow(start=ingest)
+    logger.info("[Flow] OQA orthodontist flow với nodes độc lập đã được tạo thành công")
+    return flow
 

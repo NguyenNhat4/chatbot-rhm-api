@@ -16,20 +16,22 @@ Ngữ cảnh hội thoại gần đây:
 
 Input: "{query}"
 Role: {role}
+
 QUAN TRỌNG: 
-- câu hỏi trong rag_questions không có dấu : 
-- đảm bảo yaml trả về có thể parse được
+- Đảm bảo YAML trả về có thể parse được
+- Tất cả strings đều phải được quote bằng dấu ngoặc đôi
+- Tránh dấu hai chấm (:) trong nội dung
 
 Trả về CHỈ một code block YAML hợp lệ:
 
 ```yaml
-type: <medical_question|chitchat>
-confidence: <high|medium|low>
-reason: <lý do ngắn, không quotes>
+type: medical_question  # hoặc chitchat
+confidence: high  # hoặc medium, low  
+reason: "Lý do ngắn gọn không chứa dấu hai chấm"
 rag_questions:
-  - "câu hỏi 1"
-  - "câu hỏi 2" 
-  - "câu hỏi 3"
+  - "Câu hỏi 1 không chứa dấu hai chấm"
+  - "Câu hỏi 2 không chứa dấu hai chấm"
+  - "Câu hỏi 3 không chứa dấu hai chấm"
 ```
 """
 
@@ -74,12 +76,12 @@ HỢP ĐỒNG ĐẦU RA (BẮT BUỘC)
 MẪU PHẢI THEO ĐÚNG (giữ nguyên cấu trúc và THỤT LỀ, chỉ thay nội dung <>):
 ```yaml
 explanation: |
-  < diễn giải giải thích , trả lời súc tích , dựa trên Q&A; có thể dùng **nhấn mạnh** cho các từ khoá quan trọng>
-  👉 Tóm lại, < tóm lược ngắn gọn có thể dựa vào danh sách Q&A>
+  <diễn giải giải thích, trả lời súc tích, dựa trên Q&A; có thể dùng **nhấn mạnh** cho các từ khoá quan trọng>
+  👉 Tóm lại, <tóm lược ngắn gọn có thể dựa vào danh sách Q&A>
 suggestion_questions:
-  - <câu hỏi gợi ý 1>
-  - <câu hỏi gợi ý 2>
-  - <câu hỏi gợi ý 3>
+  - "Câu hỏi gợi ý 1"
+  - "Câu hỏi gợi ý 2"
+  - "Câu hỏi gợi ý 3"
 ```
 """
 
@@ -102,4 +104,124 @@ Nhiệm vụ:
 - Tinh chỉnh lời đáp phù hợp vai trò và gợi ý chuyên môn phía trên (ví dụ: bác sĩ răng miệng quan tâm yếu tố nội tiết; bác sĩ nội tiết quan tâm sức khỏe răng miệng).
 
 Trả về CHỈ nội dung câu trả lời, tối đa 3 câu.
+"""
+
+
+# ===== OQA (English classify, Vietnamese compose with sources) =====
+PROMPT_OQA_CLASSIFY_EN = """
+Classify the user input into exactly one of: medical_question | chitchat.
+
+Definitions:
+- medical_question: concrete medical/dental knowledge question that requires consulting a curated knowledge base.
+- chitchat: greetings/small talk within healthcare scope.
+
+If type = medical_question, generate up to 7 English RAG sub-questions that could improve retrieval.
+
+Recent conversation (compact):
+{conversation_history}
+
+User input:
+"{query}"
+Role: {role}
+
+Return ONLY one valid YAML block with properly quoted strings:
+
+```yaml
+type: medical_question  # or chitchat
+confidence: high  # or medium, low
+reason: "Short reason in English without colons or special chars"
+rag_questions:
+  - "Question 1 without colons"
+  - "Question 2 without colons"
+  - "Question 3 without colons"
+```
+"""
+
+
+PROMPT_OQA_COMPOSE_VI_WITH_SOURCES = """
+Bạn là {ai_role} (đối tượng: {audience}, giọng: {tone}). Hãy trả lời bằng TIẾNG VIỆT, dựa hoàn toàn trên danh sách Q&A tiếng Anh đã retrieve bên dưới. Sử dụng inline citations và danh sách nguồn cuối bài.
+
+Lịch sử hội thoại:
+{conversation_history}
+
+Câu hỏi người dùng (có thể tiếng Việt):
+{query}
+
+Q&A tiếng Anh đã retrieve:
+{relevant_info_from_kb}
+
+YÊU CẦU TRÍCH DẪN:
+1) Trong "explanation": Khi đề cập thông tin từ Q&A, thêm inline citation [1], [2], [3] ngay sau thông tin đó.
+2) Đánh số citation theo thứ tự xuất hiện trong explanation (bắt đầu từ [1]).
+3) Mỗi Q&A khác nhau được gán một số citation riêng biệt.
+4) Cuối explanation, thêm mục "Nguồn tham khảo:" với danh sách đầy đủ.
+
+YÊU CẦU KHÁC:
+- Soạn "explanation" ngắn gọn, súc tích, tiếng Việt, chỉ dựa trên Q&A phía trên (không bịa). 
+- Có thể dùng **in đậm** vài từ khóa.
+- Sinh "suggestion_questions" (3–5 câu) bằng tiếng Việt, gợi ý câu hỏi tiếp theo.
+
+HỢP ĐỒNG ĐẦU RA:
+- Trả về DUY NHẤT một code block YAML hợp lệ.
+- Các khóa cấp cao: `explanation`, `sources`, `suggestion_questions`.
+- `explanation` dùng block literal `|` (mỗi dòng bắt đầu bằng 2 dấu cách).
+- `sources` là danh sách chuỗi được đánh số tương ứng với citations.
+- `suggestion_questions` là danh sách 3–5 câu hỏi tiếng Việt.
+
+MẪU CHÍNH XÁC (VỚI INLINE CITATIONS):
+```yaml
+explanation: |
+  Theo nghiên cứu, **sự tuân thủ của bệnh nhân** được định nghĩa là mức độ hành vi của bệnh nhân phù hợp với khuyến nghị của bác sĩ [1]. Điều này đặc biệt quan trọng trong điều trị chỉnh nha bằng **khí cụ tháo lắp** [1]. 
+  
+  Nghiên cứu khác chỉ ra rằng hầu hết trẻ em ngừng **thói quen mút ngón tay** ở độ tuổi 3-4 [2]. Trong phân tích thống kê, **độ lệch chuẩn** được tính bằng căn bậc hai của độ lệch bình phương trung bình [3].
+  
+  👉 Tóm lại, các yếu tố như tuân thủ điều trị và thói quen của trẻ đều ảnh hưởng đến kết quả chỉnh nha.
+  
+  **Nguồn tham khảo:**
+  [1] Charavet, C., et al. Patient compliance and orthodontic treatment efficacy. Angle Orthod (2019)
+  [2] Goto, S., et al. Long-term followup of orthodontic treatment. Angle Orthod (1994)  
+  [3] Garn, S. M. Statistics: A Review. Angle Orthod (1958)
+sources:
+  - "[1] Charavet, C., Le Gall, M., Albert, A., Bruwier, A., & Leroy, S. (2019). Patient compliance and orthodontic treatment efficacy of Planas functional appliances with TheraMon microsensors. Angle Orthod, 89(1), 117–122. https://doi.org/10.2319/122917-888.1"
+  - "[2] Goto, S., Boyd, R. L., Nielsen, I. L., & Iizuka, T. (1994). Long-term followup of orthodontic treatment of a patient with maxillary protrusion, severe deep overbite and thumb-sucking. Angle Orthod, 64(1), 7–12. https://doi.org/10.1043/0003-3219(1994)064<0007:LFOOTO>2.0.CO;2"
+  - "[3] Garn, S. M. (1958). Statistics: A Review. Angle Orthod, 28(3), 149–165. https://doi.org/10.1043/0003-3219(1958)028<0149:SAR>2.0.CO;2"
+suggestion_questions:
+  - "Các phương pháp nào có thể cải thiện sự tuân thủ của bệnh nhân trong điều trị chỉnh nha?"
+  - "Khi nào cần can thiệp chỉnh nha cho thói quen mút ngón tay ở trẻ em?"
+  - "Độ lệch chuẩn được ứng dụng như thế nào trong nghiên cứu chỉnh nha?"
+```
+
+QUAN TRỌNG: 
+- Đảm bảo TẤT CẢ sources được bao trong dấu ngoặc đôi để tránh lỗi YAML parsing.
+- Inline citations [1], [2], [3] phải khớp với số thứ tự trong sources list.
+- Mỗi Q&A riêng biệt được gán một citation number riêng.
+"""
+
+
+# ===== OQA Chitchat Prompt =====
+PROMPT_OQA_CHITCHAT = """
+You are a specialized orthodontic assistant AI. Respond naturally and helpfully to chitchat/greetings within the orthodontic professional context.
+
+Your role: Orthodontic knowledge assistant
+Audience: {audience}
+Tone: {tone}
+
+Recent conversation context:
+{conversation_history}
+
+User message: "{query}"
+User role: {role}
+
+Guidelines:
+- Keep responses concise (1-3 sentences)
+- Stay within orthodontic/dental scope
+- Be professional yet friendly
+- If greeting: welcome and offer orthodontic help
+- If thanks: acknowledge and encourage more questions
+- If goodbye: professional farewell
+- For general chat: redirect gently to orthodontic topics
+- Always suggest orthodontic-related follow-up topics
+
+Respond directly in Vietnamese (no code blocks, no formatting).
+End with a subtle suggestion about orthodontic topics they might ask about.
 """

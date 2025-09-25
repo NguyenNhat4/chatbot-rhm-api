@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 from chat_routes import router as chat_router
 
 # Import our flow and conversation logger
-from flow import create_med_agent_flow
+from flow import create_med_agent_flow, create_oqa_orthodontist_flow
 from utils.response_parser import (
     parse_medical_response,
     handle_greeting_response,
@@ -33,6 +33,7 @@ from utils.response_parser import (
 )
 from utils.helpers import serialize_conversation_history
 from utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME, ROLE_DESCRIPTION
+from utils.kb_oqa import preload_oqa_index, is_oqa_index_loaded
 
 # Load environment variables
 load_dotenv()
@@ -101,12 +102,26 @@ async def startup_event():
         test_results, test_score = retrieve("test", top_k=1)
         logger.info(f"🧪 Test retrieval successful: {len(test_results)} results, score: {test_score:.4f}")
         
-        logger.info("🎉 API startup completed successfully!")
+        logger.info("🎉 Main KB startup completed successfully!")
         
     except Exception as e:
         logger.error(f"❌ Failed to load knowledge base: {str(e)}")
         logger.error("⚠️  API will continue but chat functionality may be limited")
-        raise e
+        # Don't raise here - continue with OQA loading
+    
+    # Load OQA index
+    logger.info("🔄 Loading OQA vector index...")
+    try:
+        preload_oqa_index()
+        logger.info("✅ OQA index preloaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to preload OQA index: {e}")
+        logger.info("⚠️  OQA will be lazy-loaded on first request")
+        # Don't raise here - let server start even if OQA preload fails
+    
+    logger.info("🎉 All startup tasks completed!")
+
+print("🎉 All startup tasks completed!")
 
 # Add CORS middleware
 app.add_middleware(
@@ -193,6 +208,7 @@ def login_with_google(payload: GoogleLoginReq, db: Session = Depends(get_db)):
 
 # Initialize the medical flow
 med_flow = create_med_agent_flow()
+oqa_flow = create_oqa_orthodontist_flow()
 
 
 # Pydantic models for request/response
@@ -223,6 +239,7 @@ class HealthResponse(BaseModel):
     status: str
     timestamp: str
     version: str
+    message: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):
@@ -293,9 +310,15 @@ async def root():
 
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with OQA index status"""
+    oqa_loaded = is_oqa_index_loaded()
+    status = "healthy" if oqa_loaded else "degraded"
+    
     return HealthResponse(
-        status="healthy", timestamp=datetime.now().isoformat(), version="1.0.0"
+        status=status, 
+        timestamp=datetime.now().isoformat(), 
+        version="1.0.0",
+        message=f"OQA Index: {'Loaded' if oqa_loaded else 'Not Loaded'}"
     )
 
 
@@ -514,7 +537,10 @@ async def chat(
             "session_id": request.session_id,
         }
         # run chat flow  -> updating shared store
-        med_flow.run(shared)
+        if role_name == RoleEnum.ORTHODONTIST.value:
+            oqa_flow.run(shared)
+        else:
+            med_flow.run(shared)
         
         explanation = shared.get("explain")
         if not explanation or not isinstance(explanation, str) or not explanation.strip():

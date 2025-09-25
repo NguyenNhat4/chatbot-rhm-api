@@ -145,7 +145,7 @@ def _extract_from_code_fences(response: str) -> Optional[str]:
         content = match.group(2).strip()
         if content:
             logger.debug(f"_extract_from_code_fences: Found content with robust pattern")
-            return content
+            return _clean_yaml_content(content)
 
     # Fallback to original patterns if the above fails
     yaml_patterns = [
@@ -167,9 +167,53 @@ def _extract_from_code_fences(response: str) -> Optional[str]:
             content = match.group(1).strip()
             if content:
                 logger.debug(f"_extract_from_code_fences: Found content with pattern {pattern}")
-                return content
+                return _clean_yaml_content(content)
     
     return None
+
+
+def _clean_yaml_content(content: str) -> str:
+    """
+    Clean YAML content to fix common parsing issues.
+    
+    Specifically handles:
+    - URLs in sources lists that need proper quoting
+    - Basic structure cleanup
+    """
+    if not content:
+        return content
+    
+    lines = content.split('\n')
+    cleaned_lines = []
+    in_sources_section = False
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Detect sources section
+        if stripped.startswith('sources:'):
+            in_sources_section = True
+            cleaned_lines.append(line)
+            continue
+        
+        # Detect end of sources section (next top-level key)
+        if in_sources_section and stripped and not stripped.startswith('-') and not stripped.startswith(' ') and ':' in stripped:
+            in_sources_section = False
+        
+        # Process lines in sources section
+        if in_sources_section and stripped.startswith('-'):
+            # Check if source line needs quoting
+            source_content = stripped[1:].strip()  # Remove the dash
+            if source_content and not (source_content.startswith('"') and source_content.endswith('"')):
+                # Add quotes if not already quoted
+                indent = len(line) - len(line.lstrip())
+                cleaned_lines.append(' ' * indent + f'- "{source_content}"')
+            else:
+                cleaned_lines.append(line)
+        else:
+            cleaned_lines.append(line)
+    
+    return '\n'.join(cleaned_lines)
 
 def _extract_with_regex(response: str) -> Optional[str]:
     """

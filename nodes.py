@@ -1,10 +1,9 @@
 from math import log
-from unittest import result
 from pocketflow import Node
 from utils.call_llm import call_llm, APIOverloadException
 from utils.kb import retrieve, retrieve_random_by_role, get_kb, ROLE_TO_CSV
 
-from utils.response_parser import parse_yaml_response, validate_yaml_structure, parse_yaml_with_schema
+from utils.response_parser import  parse_yaml_with_schema
 from utils.prompts import (
     PROMPT_CLASSIFY_INPUT, 
     PROMPT_COMPOSE_ANSWER,
@@ -19,21 +18,16 @@ from utils.role_enum import (
     PERSONA_BY_ROLE
 )
 from typing import Any, Dict, List, Tuple
-import textwrap
-import yaml
 import logging
 from unidecode import unidecode
-import re
 import time
+
 
 # Configure logging for this module
 logger = logging.getLogger(__name__)
 
 
-
 # ========== Medical Agent Nodes ==========
-
-
 
 class IngestQuery(Node):
     def prep(self, shared):
@@ -143,7 +137,6 @@ class GreetingResponse(Node):
     """Deprecated: Chào hỏi được gom vào ChitChatRespond."""
     def post(self, shared, prep_res, exec_res):
         return "default"
-
 
 class ChitChatRespond(Node):
     """Node xử lý tất cả trường hợp không cần RAG (bao gồm chào hỏi)."""
@@ -278,8 +271,6 @@ class ComposeAnswer(Node):
         
         return "default"
 
-
-
 class ClarifyQuestionNode(Node):
     """Node xử lý clarification cho medical questions có score thấp"""
     
@@ -318,11 +309,6 @@ class ClarifyQuestionNode(Node):
         shared["explain"] = exec_res.get("explain", "")
         shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
         return "default"
-
-
-
-
-
 
 class MainDecisionAgent(Node):
     """Main decision agent - chỉ phân loại input và routing"""
@@ -392,7 +378,6 @@ class MainDecisionAgent(Node):
         else:
             # Mặc định không đẩy sang topic_suggest nữa
             return "chitchat"
-
 
 class FallbackNode(Node):
     """Node fallback khi API quá tải - retrieve query và trả kết quả dựa trên score"""
@@ -559,7 +544,6 @@ class FallbackNode(Node):
         shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
         shared["retrieval_score"] = exec_res.get("retrieval_score", 0.0)
         return "default"
-
 
 class ScoreDecisionNode(Node):
     """Node quyết định dựa trên retrieval score"""
