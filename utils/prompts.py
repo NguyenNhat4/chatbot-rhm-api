@@ -115,7 +115,7 @@ Definitions:
 - medical_question: concrete medical/dental knowledge question that requires consulting a curated knowledge base.
 - chitchat: greetings/small talk within healthcare scope.
 
-If type = medical_question, generate up to 7 English RAG sub-questions that could improve retrieval.
+If type = medical_question, generate up to 7 English RAG sub-questions that could improve retrieval, one of that will be user input but english version.
 
 Recent conversation (compact):
 {conversation_history}
@@ -166,7 +166,7 @@ HỢP ĐỒNG ĐẦU RA:
 - Các khóa cấp cao: `explanation`, `sources`, `suggestion_questions`.
 - `explanation` dùng block literal `|` (mỗi dòng bắt đầu bằng 2 dấu cách).
 - `sources` là danh sách chuỗi được đánh số tương ứng với citations.
-- `suggestion_questions` là danh sách 3–5 câu hỏi tiếng Việt.
+- `suggestion_questions` là danh sách 3–5 câu hỏi tiếng Việt (các từ chuyên nghành nào viết bằng tiếng anh sẽ tốt hơn thì dùng).
 
 MẪU CHÍNH XÁC (VỚI INLINE CITATIONS):
 ```yaml

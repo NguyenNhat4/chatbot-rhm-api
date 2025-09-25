@@ -127,8 +127,8 @@ class OQARetrieve(Node):
         logger.info("📚 [OQARetrieve] EXEC - Starting sequential OQA retrieval: user query first, then RAG")
         
         queries = []
-        if query:
-            queries.append(query)
+        # if query:
+        #     queries.append(query)
         if rag_questions:
             queries.extend([q for q in rag_questions if q])
 
@@ -159,20 +159,15 @@ class OQARetrieve(Node):
         uniq.sort(key=lambda x: x.get("score", 0.0), reverse=True)
         top5 = uniq[:5]
         
-        # Log top results with more detail
+        # Log top results with more detail (id/topic only)
         if top5:
             lines = ["\n🏷️ [OQARetrieve] TOP-5 SCORES (desc):"]
             for i, it in enumerate(top5, 1):
                 q = str(it.get('question', ''))
                 sc = float(it.get('score', 0.0))
-                ref = str(it.get('reference', ''))
-                # Extract reference info for better logging
-                ref_preview = ref[:50] if ref else "No reference"
-                if isinstance(ref, dict):
-                    authors = ref.get('authors', ['Unknown'])
-                    ref_preview = f"Authors: {authors[0] if authors else 'Unknown'}"
-                
-                lines.append(f"  {i}. score={sc:.4f} | Q: {q[:80]}... | Ref: {ref_preview}...")
+                topic = str(it.get('topic', ''))
+                src_id = str(it.get('id', ''))
+                lines.append(f"  {i}. score={sc:.4f} | Q: {q[:80]}... | Topic: {topic[:40]} | Id: {src_id}")
             logger.info("\n".join(lines))
             
             # Log aggregation statistics
@@ -194,7 +189,7 @@ class OQARetrieve(Node):
         for it in items:
             hits_for_prompt.append({
                 "cau_hoi": it.get("question", ""),
-                "cau_tra_loi": it.get("answer", ""),
+                "cau_tra_loi": it.get("context", ""),
                 "score": it.get("score", 0.0),
             })
         shared["retrieved"] = hits_for_prompt
@@ -215,14 +210,15 @@ class OQAComposeAnswerVIWithSources(Node):
         ai_role = persona.get("persona", "Bác sĩ nha khoa")
         audience = persona.get("audience", "bác sĩ nha khoa")
         tone = persona.get("tone", "ngắn gọn, chính xác")
-        # compact English Q&A block with references
+        # compact English QA block with topic and id sources
         items = shared.get("oqa_hits", [])
         lines = []
         for it in items:
             q = it.get("question", "")
-            a = it.get("answer", "")
-            ref = it.get("reference", "")
-            lines.append(f"Q: {q}\nA: {a}\nRef: {ref}\n")
+            ctx = it.get("context", "")
+            topic = it.get("topic", "")
+            src_id = it.get("id", "")
+            lines.append(f"Topic: {topic}\nQ: {q}\nContext: {ctx}\nSourceId: {src_id}\n")
         relevant_info = "\n".join(lines) if lines else "(no retrieved info)"
         formatted_history = format_conversation_history(conversation_history)
         prompt = PROMPT_OQA_COMPOSE_VI_WITH_SOURCES.format(

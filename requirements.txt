@@ -15,3 +15,5 @@ psycopg2-binary==2.9.9
 alembic==1.13.1
 passlib[bcrypt]
 python-jose[cryptography]     
+rank_bm25==0.2.2
+ujson==5.10.0

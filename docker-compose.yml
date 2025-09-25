@@ -40,18 +40,23 @@ services:
     env_file:
       - .env
     environment:
+      - RELOAD=true
+      - DEBUG=true
       - API_HOST=${API_HOST}
       - API_PORT=8000
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
-      # Mount for conversation logs (optional)
+      - ./:/app
+
       - ./logs:/app/logs
-    restart: unless-stopped
     networks:
       - chatbot-network
     depends_on:
       postgres:
         condition: service_healthy
+    command: ["python", "start_api.py"]
+
+    restart: unless-stopped
 
 networks:
   chatbot-network:
