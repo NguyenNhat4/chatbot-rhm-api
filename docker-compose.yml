@@ -46,8 +46,6 @@ services:
       - API_PORT=8000
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
-      - ./:/app
-
       - ./logs:/app/logs
     networks:
       - chatbot-network
