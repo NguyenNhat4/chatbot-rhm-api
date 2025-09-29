@@ -16,6 +16,7 @@ from database.models import Users, ChatMessage, ChatThread
 from typing import Optional, List, Dict, Any
 import logging
 from datetime import datetime
+from utils.timezone_utils import get_vietnam_time
 import uvicorn
 import os
 import uuid
@@ -38,11 +39,20 @@ from utils.kb_oqa import preload_oqa_index, is_oqa_index_loaded
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
+# Configure logging with Vietnam timezone
+from utils.timezone_utils import setup_vietnam_logging
+from config import logging_config
+
+if logging_config.USE_VIETNAM_TIMEZONE:
+    logger = setup_vietnam_logging(__name__, 
+                                 level=getattr(logging, logging_config.LOG_LEVEL.upper()),
+                                 format_str=logging_config.LOG_FORMAT)
+else:
+    logging.basicConfig(
+        level=getattr(logging, logging_config.LOG_LEVEL.upper()), 
+        format=logging_config.LOG_FORMAT
+    )
+    logger = logging.getLogger(__name__)
 
 from utils.auth import safe_hash_password, safe_verify_password
 
@@ -318,7 +328,7 @@ async def health_check():
     
     return HealthResponse(
         status=status, 
-        timestamp=datetime.now().isoformat(), 
+        timestamp=get_vietnam_time().isoformat(), 
         version="1.0.0",
         message=f"OQA Index: {'Loaded' if oqa_loaded else 'Not Loaded'}"
     )
@@ -425,7 +435,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     return DeleteUserResponse(
         message=f"User {user_id} deleted successfully",
         deleted_user=deleted_user_info,
-        timestamp=datetime.now().isoformat(),
+        timestamp=get_vietnam_time().isoformat(),
     )
 
 
@@ -450,7 +460,7 @@ async def get_available_roles():
         return RolesResponse(
             roles=roles,
             default_role=RoleEnum.PATIENT_DENTAL.value,
-            timestamp=datetime.now().isoformat(),
+            timestamp=get_vietnam_time().isoformat(),
         )
 
     except Exception as e:
@@ -521,7 +531,7 @@ async def chat(
             thread_id=thread_id,
             role="user",
             content=request.message.strip(),
-            timestamp=datetime.now(),
+            timestamp=get_vietnam_time(),
             api_role=request.role
         )
         # Defer DB writes to a single transaction later
@@ -556,7 +566,7 @@ async def chat(
             explanation=explanation,
             questionSuggestion=suggestion_questions,
             session_id=request.session_id,
-            timestamp=datetime.now().isoformat(),
+            timestamp=get_vietnam_time().isoformat(),
             input_type=input_type,
             need_clarify=need_clarify
         )
@@ -567,7 +577,7 @@ async def chat(
             thread_id=thread_id,
             role="bot",
             content=explanation,
-            timestamp=datetime.now(),
+            timestamp=get_vietnam_time(),
             suggestions=suggestion_questions,
             need_clarify=need_clarify,
             input_type=input_type
@@ -581,7 +591,7 @@ async def chat(
             # Update thread's updated_at timestamp
             thread = db.query(ChatThread).filter(ChatThread.id == thread_id).first()
             if thread:
-                thread.updated_at = datetime.now()
+                thread.updated_at = get_vietnam_time()
             
             db.commit()
         except Exception as e:
@@ -607,7 +617,7 @@ async def http_exception_handler(request, exc):
         content={
             "error": "HTTP Exception",
             "message": exc.detail,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_vietnam_time().isoformat(),
         },
     )
 
@@ -620,7 +630,7 @@ async def general_exception_handler(request, exc):
         content={
             "error": "Internal Server Error",
             "message": "An unexpected error occurred",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": get_vietnam_time().isoformat(),
         },
     )
 

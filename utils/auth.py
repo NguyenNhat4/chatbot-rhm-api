@@ -4,6 +4,7 @@ Authentication utilities for JWT token handling
 import os
 import time
 from datetime import datetime, timedelta
+from .timezone_utils import get_vietnam_time
 from typing import Dict, Optional
 
 from fastapi import Depends, HTTPException, status
@@ -70,6 +71,7 @@ def safe_verify_password(password: str, hashed: str) -> bool:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create a JWT token"""
     to_encode = data.copy()
+    # Note: JWT token expiration should use UTC as per RFC 7519 standard
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire.timestamp()})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)

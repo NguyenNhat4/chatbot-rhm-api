@@ -10,12 +10,20 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Configure logging with Vietnam timezone
+from utils.timezone_utils import setup_vietnam_logging
+from config import logging_config
+
+if logging_config.USE_VIETNAM_TIMEZONE:
+    logger = setup_vietnam_logging(__name__, 
+                                 level=getattr(logging, logging_config.LOG_LEVEL.upper()),
+                                 format_str=logging_config.LOG_FORMAT)
+else:
+    logging.basicConfig(
+        level=getattr(logging, logging_config.LOG_LEVEL.upper()),
+        format=logging_config.LOG_FORMAT
+    )
+    logger = logging.getLogger(__name__)
 
 def main():
     """Start the API server"""
