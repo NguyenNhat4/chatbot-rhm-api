@@ -80,19 +80,23 @@ Highlights from `chatbot-rhm-api/api.py`:
 
 ## PocketFlow Pipelines
 
-### Medical Agent (general roles)
+### Medical Agent Flow (`create_med_agent_flow`)
+
+The medical agent flow implements a modular architecture for handling general medical roles with intelligent routing and fallback mechanisms.
+
+#### Flow Architecture
 
 ```mermaid
-flowchart LR
-    Ingest[IngestQuery]
-    Main[MainDecisionAgent]
-    Retrieve[RetrieveFromKB]
-    Score[ScoreDecisionNode]
-    Compose[ComposeAnswer]
-    Clarify[ClarifyQuestionNode]
-    Greeting[GreetingResponse]
-    ChitChat[ChitChatRespond]
-    Fallback[FallbackNode]
+flowchart TD
+    Ingest[IngestQuery<br/>📝 Process user input & role]
+    Main[MainDecisionAgent<br/>🧠 Classify input type]
+    Retrieve[RetrieveFromKB<br/>📚 Knowledge base retrieval]
+    Score[ScoreDecisionNode<br/>⚖️ Evaluate retrieval quality]
+    Compose[ComposeAnswer<br/>✍️ Generate medical response]
+    Clarify[ClarifyQuestionNode<br/>❓ Request clarification]
+    Greeting[GreetingResponse<br/>👋 Handle greetings]
+    ChitChat[ChitChatRespond<br/>💬 Non-medical conversation]
+    Fallback[FallbackNode<br/>🔄 API overload handling]
 
     Ingest --> Main
     Main -- "retrieve_kb" --> Retrieve
@@ -104,7 +108,36 @@ flowchart LR
     Score -- "clarify" --> Clarify
     Compose -- "fallback" --> Fallback
     ChitChat -- "fallback" --> Fallback
+
+    style Ingest fill:#e1f5fe
+    style Main fill:#f3e5f5
+    style Retrieve fill:#e8f5e8
+    style Score fill:#fff3e0
+    style Compose fill:#f1f8e9
+    style Clarify fill:#fce4ec
+    style Fallback fill:#ffebee
 ```
+
+#### Node Responsibilities
+
+| Node | Purpose | Input Processing | Output Routing |
+|------|---------|------------------|----------------|
+| **IngestQuery** | Processes raw user input and role information | Extracts and validates `role` and `query` from shared store | Always routes to `MainDecisionAgent` |
+| **MainDecisionAgent** | Intelligent input classification using LLM | Analyzes query context and conversation history | Routes to: `retrieve_kb`, `chitchat`, or `fallback` |
+| **RetrieveFromKB** | Knowledge base search and retrieval | Performs sequential retrieval on user query + RAG questions | Always routes to `ScoreDecisionNode` |
+| **ScoreDecisionNode** | Quality-based decision making | Evaluates retrieval score against threshold | Routes to: `compose_answer` or `clarify` |
+| **ComposeAnswer** | Medical response generation | Creates structured medical responses with suggestions | Routes to `fallback` on API overload |
+| **ClarifyQuestionNode** | Low-score query handling | Generates clarification requests and suggestions | Terminal node |
+| **ChitChatRespond** | Non-medical conversation | Handles greetings and casual conversation | Routes to `fallback` on API overload |
+| **FallbackNode** | Robust fallback mechanism | Direct knowledge base lookup when API fails | Terminal node |
+
+#### Key Design Patterns
+
+1. **Modular Classification**: `MainDecisionAgent` uses LLM-based classification to intelligently route different input types
+2. **Score-Based Routing**: `ScoreDecisionNode` evaluates retrieval quality to determine appropriate response strategy  
+3. **Graceful Degradation**: Multiple fallback paths ensure system reliability during API overload
+4. **Sequential Retrieval**: `RetrieveFromKB` processes user query first, then RAG-generated questions for comprehensive context
+5. **Conversation Awareness**: Nodes maintain conversation history for contextual responses
 
 ### Orthodontist OQA Agent
 
