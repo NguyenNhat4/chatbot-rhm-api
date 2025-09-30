@@ -1,5 +1,6 @@
 import os
 from typing import Any, Dict, List, Optional, Tuple
+import ast
 
 import numpy as np
 import pandas as pd
@@ -180,4 +181,111 @@ def retrieve_random_oqa(amount: int = 5) -> List[Dict[str, Any]]:
     idx = get_oqa_index()
     return idx.get_random(amount)
 
+
+def get_references_by_ids(ids: List[str]) -> Dict[str, str]:
+    """Get full reference text for given list of IDs.
+    
+    Args:
+        ids: List of document IDs
+        
+    Returns:
+        Dict mapping ID to full reference text
+    """
+    idx = get_oqa_index()
+    result = {}
+    
+    for doc_id in ids:
+        # Find row with matching ID
+        matching_rows = idx._df[idx._df["id"] == doc_id]
+        if not matching_rows.empty:
+            row = matching_rows.iloc[0]
+            result[doc_id] = _ensure_str(row.get("reference", ""))
+    
+    return result
+
+
+
+def parse_reference_text(reference_text: str) -> Tuple[str, str]:
+    """Parse a reference text (stored as a Python-dict-like string) to extract title and link.
+
+    The OQA CSV stores the `reference` column as a string like:
+      "{'authors': [...], 'doi': 'https://doi.org/...', 'meta': '...', 'title': 'Some Title'}"
+
+    Returns (title, link) where link prefers `doi` if present, otherwise empty string.
+    Fallbacks to simple regex-less extraction if parsing fails.
+    """
+    title: str = ""
+    link: str = ""
+    s = reference_text.strip()
+    if not s:
+        return title, link
+    try:
+        # Safely evaluate Python-literal-like dict
+        obj = ast.literal_eval(s)
+        if isinstance(obj, dict):
+            title = _ensure_str(obj.get("title", ""))
+            # Prefer DOI if looks like a URL
+            doi_val = _ensure_str(obj.get("doi", ""))
+            if doi_val.startswith("http://") or doi_val.startswith("https://"):
+                link = doi_val
+            else:
+                # some datasets may store other key for links
+                link = doi_val
+            # Optional: fallback to any other url-like fields if doi missing
+            if not link:
+                for k, v in obj.items():
+                    vv = _ensure_str(v)
+                    if vv.startswith("http://") or vv.startswith("https://"):
+                        link = vv
+                        break
+            return title, link
+    except Exception:
+        # ignore and try fallback heuristics
+        pass
+
+    # Fallback: crude extraction for 'title': '...'
+    try:
+        # Extract between "title': '" and next "'"
+        t_marker = "'title': '"
+        ti = s.find(t_marker)
+        if ti >= 0:
+            ti += len(t_marker)
+            te = s.find("'", ti)
+            if te > ti:
+                title = _ensure_str(s[ti:te])
+        d_marker = "'doi': '"
+        di = s.find(d_marker)
+        if di >= 0:
+            di += len(d_marker)
+            de = s.find("'", di)
+            if de > di:
+                cand = _ensure_str(s[di:de])
+                if cand:
+                    link = cand
+    except Exception:
+        pass
+    return title, link
+
+
+def format_references_numbered(id_list: List[str], id_to_ref: Dict[str, str]) -> List[str]:
+    """Format references as [N] TITLE LINK from a list of reference IDs and their raw text.
+
+    Any missing fields are skipped gracefully. If no link, omit it.
+    """
+    output: List[str] = []
+    for i, ref_id in enumerate(id_list, start=1):
+        raw = id_to_ref.get(ref_id, "")
+        title, link = parse_reference_text(raw)
+        parts: List[str] = []
+        if title:
+            parts.append(title)
+        if link:
+            parts.append(link)
+        if parts:
+            output.append(f"[{i}] {' '.join(parts)}")
+        else:
+            # Fallback to raw if parsing failed
+            if raw:
+                output.append(f"[{i}] {raw}")
+    return output
 

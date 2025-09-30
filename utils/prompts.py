@@ -139,7 +139,7 @@ rag_questions:
 
 
 PROMPT_OQA_COMPOSE_VI_WITH_SOURCES = """
-Bạn là {ai_role} (đối tượng: {audience}, giọng: {tone}). Hãy trả lời bằng TIẾNG VIỆT, dựa hoàn toàn trên danh sách Q&A tiếng Anh đã retrieve bên dưới. Sử dụng inline citations và danh sách nguồn cuối bài.
+Bạn là {ai_role} (đối tượng: {audience}, giọng: {tone}). Hãy trả lời bằng TIẾNG VIỆT, dựa hoàn toàn trên danh sách Q&A tiếng Anh đã retrieve bên dưới. Sử dụng inline citations trong explanation.
 
 Lịch sử hội thoại:
 {conversation_history}
@@ -154,18 +154,19 @@ YÊU CẦU TRÍCH DẪN:
 1) Trong "explanation": Khi đề cập thông tin từ Q&A, thêm inline citation [1], [2], [3] ngay sau thông tin đó.
 2) Đánh số citation theo thứ tự xuất hiện trong explanation (bắt đầu từ [1]).
 3) Mỗi Q&A khác nhau được gán một số citation riêng biệt.
-4) Cuối explanation, thêm mục "Nguồn tham khảo:" với danh sách đầy đủ.
+4) QUAN TRỌNG: Trong "reference_ids", liệt kê các SourceId tương ứng với từng citation number.
 
 YÊU CẦU KHÁC:
 - Soạn "explanation" ngắn gọn, súc tích, tiếng Việt, chỉ dựa trên Q&A phía trên (không bịa). 
 - Có thể dùng **in đậm** vài từ khóa.
+- KHÔNG thêm "Nguồn tham khảo:" vào explanation (hệ thống sẽ tự động thêm sau).
 - Sinh "suggestion_questions" (3–5 câu) bằng tiếng Việt, gợi ý câu hỏi tiếp theo.
 
 HỢP ĐỒNG ĐẦU RA:
 - Trả về DUY NHẤT một code block YAML hợp lệ.
-- Các khóa cấp cao: `explanation`, `sources`, `suggestion_questions`.
+- Các khóa cấp cao: `explanation`, `reference_ids`, `suggestion_questions`.
 - `explanation` dùng block literal `|` (mỗi dòng bắt đầu bằng 2 dấu cách).
-- `sources` là danh sách chuỗi được đánh số tương ứng với citations.
+- `reference_ids` là danh sách các SourceId tương ứng với citations [1], [2], [3]...
 - `suggestion_questions` là danh sách 3–5 câu hỏi tiếng Việt (các từ chuyên nghành nào viết bằng tiếng anh sẽ tốt hơn thì dùng).
 
 MẪU CHÍNH XÁC (VỚI INLINE CITATIONS):
@@ -176,15 +177,10 @@ explanation: |
   Nghiên cứu khác chỉ ra rằng hầu hết trẻ em ngừng **thói quen mút ngón tay** ở độ tuổi 3-4 [2]. Trong phân tích thống kê, **độ lệch chuẩn** được tính bằng căn bậc hai của độ lệch bình phương trung bình [3].
   
   👉 Tóm lại, các yếu tố như tuân thủ điều trị và thói quen của trẻ đều ảnh hưởng đến kết quả chỉnh nha.
-  
-  **Nguồn tham khảo:**
-  [1] Charavet, C., et al. Patient compliance and orthodontic treatment efficacy. Angle Orthod (2019)
-  [2] Goto, S., et al. Long-term followup of orthodontic treatment. Angle Orthod (1994)  
-  [3] Garn, S. M. Statistics: A Review. Angle Orthod (1958)
-sources:
-  - "[1] Charavet, C., Le Gall, M., Albert, A., Bruwier, A., & Leroy, S. (2019). Patient compliance and orthodontic treatment efficacy of Planas functional appliances with TheraMon microsensors. Angle Orthod, 89(1), 117–122. https://doi.org/10.2319/122917-888.1"
-  - "[2] Goto, S., Boyd, R. L., Nielsen, I. L., & Iizuka, T. (1994). Long-term followup of orthodontic treatment of a patient with maxillary protrusion, severe deep overbite and thumb-sucking. Angle Orthod, 64(1), 7–12. https://doi.org/10.1043/0003-3219(1994)064<0007:LFOOTO>2.0.CO;2"
-  - "[3] Garn, S. M. (1958). Statistics: A Review. Angle Orthod, 28(3), 149–165. https://doi.org/10.1043/0003-3219(1958)028<0149:SAR>2.0.CO;2"
+reference_ids:
+  - "abc123-def456-ghi789"
+  - "xyz789-uvw456-rst123"
+  - "pqr456-mno123-jkl789"
 suggestion_questions:
   - "Các phương pháp nào có thể cải thiện sự tuân thủ của bệnh nhân trong điều trị chỉnh nha?"
   - "Khi nào cần can thiệp chỉnh nha cho thói quen mút ngón tay ở trẻ em?"
@@ -192,9 +188,10 @@ suggestion_questions:
 ```
 
 QUAN TRỌNG: 
-- Đảm bảo TẤT CẢ sources được bao trong dấu ngoặc đôi để tránh lỗi YAML parsing.
-- Inline citations [1], [2], [3] phải khớp với số thứ tự trong sources list.
-- Mỗi Q&A riêng biệt được gán một citation number riêng.
+- Đảm bảo reference_ids list có cùng số phần tử với số lượng citations [1], [2], [3]...
+- Inline citations [1], [2], [3] phải khớp với thứ tự trong reference_ids list.
+- Mỗi Q&A riêng biệt được gán một citation number và SourceId riêng.
+- KHÔNG thêm phần "Nguồn tham khảo:" vào cuối explanation (hệ thống sẽ tự thêm).
 """
 
 

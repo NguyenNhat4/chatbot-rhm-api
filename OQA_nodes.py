@@ -17,7 +17,12 @@ from utils.role_enum import (
     PERSONA_BY_ROLE
 )
 
-from utils.kb_oqa import retrieve_oqa, retrieve_random_oqa
+from utils.kb_oqa import (
+    retrieve_oqa,
+    retrieve_random_oqa,
+    get_references_by_ids,
+    format_references_numbered,
+)
 import logging
 
 # Configure logging for this module with Vietnam timezone
@@ -257,8 +262,8 @@ class OQAComposeAnswerVIWithSources(Node):
             # First try normal parsing
             result = parse_yaml_with_schema(
                 resp,
-                required_fields=["explanation", "sources", "suggestion_questions"],
-                field_types={"explanation": str, "sources": list, "suggestion_questions": list},
+                required_fields=["explanation", "reference_ids", "suggestion_questions"],
+                field_types={"explanation": str, "reference_ids": list, "suggestion_questions": list},
             )
             
             if not result or isinstance(result, str):
@@ -279,7 +284,7 @@ class OQAComposeAnswerVIWithSources(Node):
                         if isinstance(parsed, dict):
                             result = {
                                 "explanation": parsed.get("explanation", ""),
-                                "sources": parsed.get("sources", []),
+                                "reference_ids": parsed.get("reference_ids", []),
                                 "suggestion_questions": parsed.get("suggestion_questions", [])
                             }
                             logger.info("✍️ [OQACompose] EXEC - Manual YAML parsing successful")
@@ -295,15 +300,35 @@ class OQAComposeAnswerVIWithSources(Node):
                 logger.warning("✍️ [OQACompose] EXEC - All parsing failed, using fallback")
                 return {
                     "explain": "Xin lỗi, tôi chưa thể tổng hợp câu trả lời phù hợp lúc này.",
-                    "sources": [],
+                    "reference_ids": [],
                     "suggestion_questions": [],
                     "preformatted": True,
                 }
             
-            logger.info(f"✍️ [OQACompose] EXEC - Successful composition: explanation_len={len(result.get('explanation', ''))}, sources={len(result.get('sources', []))}, suggestions={len(result.get('suggestion_questions', []))}")
+            # Get full references from KB using IDs
+            reference_ids = result.get("reference_ids", [])
+            logger.info(f"✍️ [OQACompose] EXEC - Got {len(reference_ids)} reference IDs: {reference_ids}")
+            
+            # Query KB for full references
+            id_to_ref = get_references_by_ids(reference_ids)
+            logger.info(f"✍️ [OQACompose] EXEC - Retrieved {len(id_to_ref)} full references from KB")
+            
+            # Build sources list with required format: [N] TITLE LINK
+            sources = format_references_numbered(reference_ids, id_to_ref)
+            missing_ids = [rid for rid in reference_ids if rid not in id_to_ref]
+            for rid in missing_ids:
+                logger.warning(f"✍️ [OQACompose] EXEC - ID not found in KB: {rid}")
+            
+            # Append sources to explanation
+            explanation = result.get("explanation", "")
+            if sources:
+                explanation += "\n\n**Nguồn tham khảo:**\n" + "\n".join(sources)
+                logger.info(f"✍️ [OQACompose] EXEC - Appended {len(sources)} sources to explanation")
+            
+            logger.info(f"✍️ [OQACompose] EXEC - Successful composition: explanation_len={len(explanation)}, sources={len(sources)}, suggestions={len(result.get('suggestion_questions', []))}")
             return {
-                "explain": result.get("explanation", ""),
-                "sources": result.get("sources", []),
+                "explain": explanation,
+                "sources": sources,
                 "suggestion_questions": result.get("suggestion_questions", []),
                 "preformatted": True,
             }
@@ -312,7 +337,7 @@ class OQAComposeAnswerVIWithSources(Node):
             logger.warning("✍️ [OQACompose] EXEC - API overloaded, using fallback response")
             return {
                 "explain": "Xin lỗi, dịch vụ hiện đang quá tải. Vui lòng thử lại sau.",
-                "sources": [],
+                "reference_ids": [],
                 "suggestion_questions": ["Try asking a simpler question", "Check back later", "Rephrase your question"],
                 "preformatted": True,
             }
