@@ -12,7 +12,7 @@ load_dotenv()
 
 # Configure logging with Vietnam timezone
 from utils.timezone_utils import setup_vietnam_logging
-from config import logging_config
+from config.logging_config import logging_config
 
 if logging_config.USE_VIETNAM_TIMEZONE:
     logger = setup_vietnam_logging(__name__, 
@@ -64,7 +64,7 @@ def main():
             host=host,
             port=port,
             reload=reload_enabled,
-            reload_dirs=[".", "utils", "database", "services"],  # Watch these directories
+            reload_dirs=[".", "utils", "database", "services", "api", "core", "config"],  # Watch these directories
             reload_excludes=["*.log", "*.db", "__pycache__", ".git"],  # Ignore these
             log_level="info"
         )
