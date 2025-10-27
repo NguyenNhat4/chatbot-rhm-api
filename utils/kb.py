@@ -1,11 +1,11 @@
 import os
 import random
+import re
 from typing import List, Dict, Any, Tuple, Optional
 from functools import lru_cache
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from rank_bm25 import BM25Okapi
 from unidecode import unidecode
 from .role_enum import RoleEnum
 
@@ -14,8 +14,9 @@ KB_COLUMNS = [
     "CHỦ  ĐỀ  CON",
     "MÃ SỐ",
     "CÂU HỎI",
-    "CÂU  TRẢ    LỜI",  
+    "CÂU  TRẢ    LỜI",
     "keywords",
+    "GIẢI THÍCH",  # Optional column - not all CSV files have this
 ]
 
 ROLE_TO_CSV = {
@@ -44,17 +45,22 @@ def _collapse_spaces(text: str) -> str:
     return " ".join(str(text).strip().split())
 
 
+def _tokenize(text: str) -> List[str]:
+    """Tokenize text for BM25 by normalizing Vietnamese and removing special chars."""
+    s = unidecode(str(text)).lower()
+    s = re.sub(r"[^a-z0-9\s]", " ", s)
+    return [t for t in s.split() if t]
+
+
 class KnowledgeBaseIndex:
     def __init__(self, kb_dir: str = "medical_knowledge_base") -> None:
         self.kb_dir = kb_dir
         self.df: pd.DataFrame = pd.DataFrame()
-        self.vectorizer: TfidfVectorizer | None = None
-        self.matrix = None
+        self.bm25: BM25Okapi | None = None
         # Store individual CSV dataframes for role-based access
         self.role_dataframes: Dict[str, pd.DataFrame] = {}
-        # Store role-specific vectorizers and matrices
-        self.role_vectorizers: Dict[str, TfidfVectorizer] = {}
-        self.role_matrices: Dict[str, Any] = {}
+        # Store role-specific BM25 indices
+        self.role_bm25s: Dict[str, BM25Okapi] = {}
         self._load()
 
     def _load(self) -> None:
@@ -86,6 +92,10 @@ class KnowledgeBaseIndex:
                 key = _collapse_spaces(c)
                 colmap[c] = key
             df = df.rename(columns=colmap)
+
+            # Handle STT → MÃ SỐ mapping for bsrhm.csv compatibility
+            if "STT" in df.columns and "MÃ SỐ" not in df.columns:
+                df["MÃ SỐ"] = df["STT"]
 
             # Ensure required columns exist under BOTH original (possibly multi-space)
             # and single-space-collapsed variants for downstream compatibility.
@@ -121,11 +131,11 @@ class KnowledgeBaseIndex:
             
             # Store individual CSV dataframe for role-based access
             self.role_dataframes[name] = df.copy()
-            
-            # Create role-specific vectorizer if this CSV maps to a role
+
+            # Create role-specific BM25 index if this CSV maps to a role
             if name in csv_to_role and len(df) > 0:
                 role_key = csv_to_role[name]
-                
+
                 # Create combined field for this role's data
                 role_df = df.copy()
                 role_df["combined"] = (
@@ -138,21 +148,16 @@ class KnowledgeBaseIndex:
                     + role_df["CÂU  TRẢ    LỜI"]
                     + " \n "
                     + role_df["keywords"]
+                    + " \n "
+                    + role_df["GIẢI THÍCH"]  # Include explanation if available
                 )
                 role_df["combined_norm"] = role_df["combined"].apply(_normalize_accents)
-                
-                # Create vectorizer and matrix for this role
-                role_vectorizer = TfidfVectorizer(
-                    ngram_range=(1, 2),
-                    min_df=1,
-                    max_df=0.95,
-                    sublinear_tf=True,
-                    dtype=np.float32,
-                )
-                role_matrix = role_vectorizer.fit_transform(role_df["combined_norm"])
-                
-                self.role_vectorizers[role_key] = role_vectorizer
-                self.role_matrices[role_key] = role_matrix
+
+                # Tokenize corpus for BM25
+                tokenized_corpus = [_tokenize(doc) for doc in role_df["combined_norm"]]
+
+                # Create BM25 index for this role
+                self.role_bm25s[role_key] = BM25Okapi(tokenized_corpus)
             
             frames.append(df)
 
@@ -173,71 +178,69 @@ class KnowledgeBaseIndex:
             + merged["CÂU  TRẢ    LỜI"]
             + " \n "
             + merged["keywords"]
+            + " \n "
+            + merged["GIẢI THÍCH"]  # Include explanation if available
         )
 
         merged["combined_norm"] = merged["combined"].apply(_normalize_accents)
 
         self.df = merged
 
-        # Create general vectorizer for fallback search
-        self.vectorizer = TfidfVectorizer(
-            ngram_range=(1, 2),
-            min_df=1,
-            max_df=0.95,
-            sublinear_tf=True,
-            dtype=np.float32,
-        )
-        self.matrix = self.vectorizer.fit_transform(self.df["combined_norm"])  # type: ignore[arg-type]
+        # Create general BM25 index for fallback search
+        tokenized_corpus_general = [_tokenize(doc) for doc in self.df["combined_norm"]]
+        self.bm25 = BM25Okapi(tokenized_corpus_general)
 
     def search(self, query: str, role: Optional[str] = None, top_k: int = 5) -> List[Dict[str, Any]]:
         if not query.strip():
             return []
-        
+
         # Role-specific search
-        if role and role in self.role_vectorizers:
-            vectorizer = self.role_vectorizers[role]
-            matrix = self.role_matrices[role]
+        if role and role in self.role_bm25s:
+            bm25_index = self.role_bm25s[role]
             # Find corresponding dataframe
             csv_file = ROLE_TO_CSV.get(role)
             if csv_file and csv_file in self.role_dataframes:
                 source_df = self.role_dataframes[csv_file]
             else:
                 # Fallback to general search if no role-specific data
-                vectorizer = self.vectorizer
-                matrix = self.matrix
+                assert self.bm25 is not None
+                bm25_index = self.bm25
                 source_df = self.df
         else:
             # General search across all data
-            assert self.vectorizer is not None and self.matrix is not None
-            vectorizer = self.vectorizer
-            matrix = self.matrix
+            assert self.bm25 is not None
+            bm25_index = self.bm25
             source_df = self.df
-        
+
+        # Tokenize query
         q = _normalize_accents(_normalize_text(query))
-        q_vec = vectorizer.transform([q])
-        # Fast cosine via L2-normalized TF-IDF: dot product == cosine
-        # Keep computation in sparse and only densify the 1xN result vector
-        sims_sparse = q_vec @ matrix.T
-        sims = sims_sparse.toarray().ravel()
-        if sims.size == 0:
+        q_tokens = _tokenize(q)
+
+        # Get BM25 scores
+        scores = bm25_index.get_scores(q_tokens)
+        scores = np.array(scores, dtype=np.float32)
+
+        if scores.size == 0:
             return []
-        k = int(min(top_k, sims.shape[0]))
+
+        k = int(min(top_k, scores.shape[0]))
         # Use argpartition for O(n) top-k selection, then sort those k
-        idx_part = np.argpartition(sims, -k)[-k:]
-        idx = idx_part[np.argsort(sims[idx_part])[::-1]]
-        
+        idx_part = np.argpartition(scores, -k)[-k:]
+        idx = idx_part[np.argsort(scores[idx_part])[::-1]]
+
         results: List[Dict[str, Any]] = []
         for i in idx:
             row = source_df.iloc[int(i)]
             results.append(
                 {
-                    "score": float(sims[int(i)]),
+                    "score": float(scores[int(i)]),
                     "de_muc": row.get("ĐỀ MỤC", ""),
                     "chu_de_con": row.get("CHỦ  ĐỀ  CON", ""),
                     "ma_so": row.get("MÃ SỐ", ""),
                     "cau_hoi": row.get("CÂU HỎI", ""),
                     "cau_tra_loi": row.get("CÂU  TRẢ    LỜI", ""),
                     "keywords": row.get("keywords", ""),
+                    "giai_thich": row.get("GIẢI THÍCH", ""),  # Add explanation field
                 }
             )
         return results
@@ -282,6 +285,7 @@ class KnowledgeBaseIndex:
                 "cau_hoi": row.get("CÂU HỎI", ""),
                 "cau_tra_loi": row.get("CÂU  TRẢ    LỜI", ""),
                 "keywords": row.get("keywords", ""),
+                "giai_thich": row.get("GIẢI THÍCH", ""),  # Add explanation field
             })
         
         return results

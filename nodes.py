@@ -3,7 +3,7 @@ from pocketflow import Node
 from utils.call_llm import call_llm
 from utils.APIKeyManager import APIOverloadException
 from config import timeout_config
-from utils.kb import retrieve, retrieve_random_by_role, get_kb, ROLE_TO_CSV
+from utils.kb import retrieve_random_by_role, get_kb, ROLE_TO_CSV
 
 from utils.response_parser import  parse_yaml_with_schema
 from utils.prompts import (
@@ -14,12 +14,13 @@ from utils.prompts import (
 from utils.helpers import (
     format_kb_qa_list,
     get_score_threshold,
-    format_conversation_history
+    format_conversation_history,
+    aggregate_retrievals
 )
 from utils.role_enum import (
-    PERSONA_BY_ROLE
+    PERSONA_BY_ROLE,
+    ROLE_DESCRIPTION_BY_VALUE
 )
-from typing import Any, Dict, List, Tuple
 import logging
 from unidecode import unidecode
 import time
@@ -81,50 +82,23 @@ class RetrieveFromKB(Node):
         if rag_questions:
             retrieval_queries.extend([q for q in rag_questions if q])
 
-        aggregated = []
-        best_seen_score = 0.0
-        for rq in retrieval_queries:
-            res, sc = retrieve(rq, user_role, top_k=5)
-            logger.info(f"📚 [RetrieveFromKB] EXEC - Retrieve for '{rq[:60]}...': n={len(res) if res else 0}, best={sc if res else 0.0:.4f}")
-            if res:
-                aggregated.extend(res)
-                if sc and sc > best_seen_score:
-                    best_seen_score = sc
+        # Use aggregate_retrievals helper function
+        top5, top_score = aggregate_retrievals(retrieval_queries, role=user_role, top_k=5)
 
-        # Khử trùng lặp theo mã số hoặc câu hỏi chuẩn hoá, giữ bản có score cao nhất
-        seen_max = {}
-        def _norm_text(s: str) -> str:
-            return " ".join(unidecode((s or "").lower()).split())
-
-        def _key(item):
-            return item.get('ma_so') or _norm_text(item.get('cau_hoi', ''))
-
-        for it in aggregated:
-            k = _key(it)
-            if not k:
-                continue
-            cur = seen_max.get(k)
-            if cur is None or float(it.get('score', 0.0)) > float(cur.get('score', 0.0)):
-                seen_max[k] = it
-
-        uniq = list(seen_max.values())
-        uniq.sort(key=lambda x: x.get('score', 0.0), reverse=True)
-        top5 = uniq[:5]
-
-        # Log định dạng QA và bảng điểm
+        # Log formatted QA list and score table
         try:
             formatted = format_kb_qa_list(top5, max_items=5)
             if formatted:
                 logger.info("\n📚 [RetrieveFromKB] FORMATTED Top-5:\n" + formatted)
         except Exception:
             pass
+
         if top5:
             lines = ["\n🏷️ [RetrieveFromKB] TOP-5 SCORES (desc):"]
             for i, it in enumerate(top5, 1):
                 lines.append(f"  {i}. score={float(it.get('score',0.0)):.4f} | Q: {str(it.get('cau_hoi',''))[:140]}")
             logger.info("\n".join(lines))
 
-        top_score = float(top5[0].get('score', 0.0)) if top5 else 0.0
         logger.info(f"📚 [RetrieveFromKB] EXEC - Aggregated top5={len(top5)}, top_score={top_score:.4f}")
         return top5, top_score
 
@@ -178,14 +152,14 @@ class ChitChatRespond(Node):
         else:
              audience, tone =  'người dùng phổ thông', 'thân thiện, rõ ràng'
 
-        # Gợi ý chuyên môn theo vai trò bác sĩ
-        role_lower = (role or '').lower()
-     
+        # Lấy description từ role value
+        role_purpose_description = ROLE_DESCRIPTION_BY_VALUE.get(role, "Người dùng")
 
         prompt = PROMPT_CHITCHAT_RESPONSE.format(
             conversation_history=formatted_history,
             query=query,
             role=role,
+            description=role_purpose_description,
             audience=audience,
             tone=tone
         )
@@ -430,6 +404,7 @@ class FallbackNode(Node):
                             "chu_de_con": row.get("CHỦ  ĐỀ  CON", ""),
                             "ma_so": row.get("MÃ SỐ", ""),
                             "keywords": row.get("keywords", ""),
+                            "giai_thich": row.get("GIẢI THÍCH", ""),
                         })
 
             # Build retrieval queries: user input first, then rag_questions (if any)
@@ -439,33 +414,8 @@ class FallbackNode(Node):
             if rag_questions:
                 retrieval_queries.extend([q for q in rag_questions if q])
 
-            # Aggregate retrievals across queries, deduplicate by ma_so or normalized question
-            aggregated: List[Dict[str, Any]] = []
-            for rq in retrieval_queries:
-                try:
-                    res, sc = retrieve(rq, role, top_k=5)
-                    logger.info(f"🔄 [FallbackNode] EXEC - Retrieve for '{rq[:40]}...': {len(res) if res else 0} results, best score: {sc if res else 0.0:.4f}")
-                    if res:
-                        aggregated.extend(res)
-                except Exception:
-                    continue
-
-            # Deduplicate and keep highest score per key
-            seen_max: Dict[str, Dict[str, Any]] = {}
-            def _key(item: Dict[str, Any]) -> str:
-                return item.get('ma_so') or _norm_text(item.get('cau_hoi', ''))
-
-            for it in aggregated:
-                k = _key(it)
-                if not k:
-                    continue
-                cur = seen_max.get(k)
-                if cur is None or float(it.get('score', 0.0)) > float(cur.get('score', 0.0)):
-                    seen_max[k] = it
-
-            uniq: List[Dict[str, Any]] = list(seen_max.values())
-            uniq.sort(key=lambda x: x.get('score', 0.0), reverse=True)
-            top5: List[Dict[str, Any]] = uniq[:5]
+            # Use aggregate_retrievals helper function
+            top5, _ = aggregate_retrievals(retrieval_queries, role=role, top_k=5)
 
             try:
                 formatted = format_kb_qa_list(top5, max_items=5)

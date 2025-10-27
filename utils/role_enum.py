@@ -17,9 +17,15 @@ ROLE_DISPLAY_NAME: Dict[RoleEnum, str] = {
     RoleEnum.DOCTOR_ENDOCRINE: "Bác sĩ nội tiết",
     RoleEnum.ORTHODONTIST: "Bác sĩ chỉnh nha",
 }
-
+ROLE_DESCRIPTION_BY_VALUE = {
+    RoleEnum.PATIENT_DENTAL.value: "Dành cho người cần tư vấn về các vấn đề răng miệng, nha chu, và chăm sóc sức khỏe răng miệng",
+    RoleEnum.PATIENT_DIABETES.value: "Dành cho người mắc đái tháo đường cần tư vấn về mối liên hệ giữa bệnh đái tháo đường và sức khỏe răng miệng",
+    RoleEnum.DOCTOR_DENTAL.value: "Dành cho bác sĩ nha khoa cần tư vấn về tác động của đái tháo đường đến điều trị nha khoa",
+    RoleEnum.DOCTOR_ENDOCRINE.value: "Dành cho bác sĩ nội tiết cần hiểu về biến chứng răng miệng ở bệnh nhân đái tháo đường",
+    RoleEnum.ORTHODONTIST.value: "Dành cho bác sĩ chỉnh nha cần tham khảo kiến thức y khoa liên quan nha khoa",
+}
 ROLE_DESCRIPTION: Dict[RoleEnum, str] = {
-    RoleEnum.PATIENT_DENTAL: "Dành cho người cần tư vấn về các vấn đề răng miệng, nha chu, và chăm sóc sức khỏe răng miệng",
+    RoleEnum.PATIENT_DENTAL : "Dành cho người cần tư vấn về các vấn đề răng miệng, nha chu, và chăm sóc sức khỏe răng miệng",
     RoleEnum.PATIENT_DIABETES: "Dành cho người mắc đái tháo đường cần tư vấn về mối liên hệ giữa bệnh đái tháo đường và sức khỏe răng miệng",
     RoleEnum.DOCTOR_DENTAL: "Dành cho bác sĩ nha khoa cần tư vấn về tác động của đái tháo đường đến điều trị nha khoa",
     RoleEnum.DOCTOR_ENDOCRINE: "Dành cho bác sĩ nội tiết cần hiểu về biến chứng răng miệng ở bệnh nhân đái tháo đường",

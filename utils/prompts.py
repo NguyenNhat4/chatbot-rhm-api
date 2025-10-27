@@ -16,7 +16,6 @@ Ngữ cảnh hội thoại gần đây:
 
 Input: "{query}"
 Role: {role}
-
 QUAN TRỌNG: 
 - Đảm bảo YAML trả về có thể parse được
 - Tất cả strings đều phải được quote bằng dấu ngoặc đôi
@@ -96,8 +95,10 @@ Giọng: {tone}
 Ngữ cảnh hội thoại gần đây:
 {conversation_history}
 
-Người dùng: {query}
+Input của người dùng: {query}
 Role của họ: {role}
+Mô tả đoạn chat: {description}
+
 Ví dụ một trả lời thân thiện: " Xin chào, tôi là trợ lý AI của bạn đây, bạn cần tôi giúp gì hôm nay". 
 Nhiệm vụ:
 - Nếu người dùng chào hỏi/xã giao/hỏi chung: đáp lại thân thiện, định hướng trao đổi liên quan sức khỏe.
