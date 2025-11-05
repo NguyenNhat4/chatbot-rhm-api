@@ -1,6 +1,6 @@
 """
 Script to build metadata table from all CSV files
-Tạo bảng metadata với cấu trúc phân cấp: ĐỀ MỤC → CHỦ ĐỀ CON
+Tạo bảng metadata với cấu trúc phân cấp: DEMUC → CHUDECON
 """
 
 import os
@@ -58,7 +58,7 @@ class MetadataBuilder:
         df.columns = [self._normalize_column_name(col) for col in df.columns]
 
         # Check for required columns
-        required_cols = ["ĐỀ MỤC", "CHỦ ĐỀ CON"]
+        required_cols = ["DEMUC", "CHUDECON"]
         missing_cols = [col for col in required_cols if col not in df.columns]
 
         if missing_cols:
@@ -69,8 +69,8 @@ class MetadataBuilder:
 
         # Extract metadata
         for idx, row in df.iterrows():
-            de_muc = self._normalize_text(row.get("ĐỀ MỤC", ""))
-            chu_de_con = self._normalize_text(row.get("CHỦ ĐỀ CON", ""))
+            de_muc = self._normalize_text(row.get("DEMUC", ""))
+            chu_de_con = self._normalize_text(row.get("CHUDECON", ""))
             ma_so = self._normalize_text(row.get("MÃ SỐ", row.get("STT", "")))
             cau_hoi = self._normalize_text(row.get("CÂU HỎI", row.get("Câu hỏi", "")))
 
@@ -89,7 +89,7 @@ class MetadataBuilder:
                         "cau_hoi": cau_hoi[:100] + "..." if len(cau_hoi) > 100 else cau_hoi
                     })
             elif de_muc:
-                # Entry có ĐỀ MỤC nhưng không có CHỦ ĐỀ CON
+                # Entry có DEMUC nhưng không có CHUDECON
                 if "_no_subtopic_" not in self.metadata[de_muc]:
                     self.metadata[de_muc]["_no_subtopic_"] = {
                         "count": 0,
@@ -160,10 +160,10 @@ class MetadataBuilder:
                     continue
 
                 rows.append({
-                    "ĐỀ MỤC": de_muc,
-                    "CHỦ ĐỀ CON": chu_de_con,
-                    "Số lượng câu hỏi": info["count"],
-                    "Tệp nguồn": ", ".join(sorted(list(info["csv_files"])))
+                    "DEMUC": de_muc,
+                    "CHUDECON": chu_de_con,
+                    "SOLUONGCAUHOI": info["count"],
+                    "NGUON": ", ".join(sorted(list(info["csv_files"])))
                 })
 
         df = pd.DataFrame(rows)
@@ -230,8 +230,8 @@ def main():
     print("\n" + "=" * 60)
     print("SUMMARY STATISTICS")
     print("=" * 60)
-    print(f"Total ĐỀ MỤC: {summary['total_topics']}")
-    print(f"Total CHỦ ĐỀ CON: {summary['total_subtopics']}")
+    print(f"Total DEMUC: {summary['total_topics']}")
+    print(f"Total CHUDECON: {summary['total_subtopics']}")
     print(f"Total Questions: {summary['total_questions']}")
 
     # Export to CSV
