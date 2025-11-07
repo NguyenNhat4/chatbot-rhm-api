@@ -1,23 +1,8 @@
-from math import log
+# Core framework import
 from pocketflow import Node
-from utils.llm import call_llm, PROMPT_CLASSIFY_INPUT, PROMPT_COMPOSE_ANSWER, PROMPT_CHITCHAT_RESPONSE
-from utils.auth import APIOverloadException
-from config.timeout_config import timeout_config
-from utils.knowledge_base import retrieve_random_by_role, get_kb, ROLE_TO_CSV
-from utils.parsing import parse_yaml_with_schema
-from utils.helpers import (
-    format_kb_qa_list,
-    get_score_threshold,
-    format_conversation_history,
-    aggregate_retrievals
-)
-from utils.role_enum import (
-    PERSONA_BY_ROLE,
-    ROLE_DESCRIPTION_BY_VALUE
-)
+
+# Standard library imports
 import logging
-from unidecode import unidecode
-import time
 
 # Configure logging for this module with Vietnam timezone
 from utils.timezone_utils import setup_vietnam_logging
@@ -157,57 +142,77 @@ class RagAgent(Node):
 
 
 class RetrieveFromKB(Node):
+    """
+    Retrieve relevant QA pairs from Qdrant vector database using hybrid search.
+
+    Refactored to follow PocketFlow best practices:
+    - prep(): Read from shared store ONLY
+    - exec(): Call Qdrant retrieval utility function
+    - post(): Write to shared store ONLY
+
+    Output: shared["question_retrieved_list"] - list of retrieved QA pairs
+    """
+
     def prep(self, shared):
-        logger.info("📚 [RetrieveFromKB] PREP - Đọc query để retrieve")
+        logger.info("📚 [RetrieveFromKB] PREP - Đọc query và metadata từ shared")
+
+        # Read from shared store ONLY
         query = shared.get("query", "")
-        user_role = shared.get("role", "")
         demuc = shared.get("demuc", "")
         chu_de_con = shared.get("chu_de_con", "")
+
         logger.info(f"📚 [RetrieveFromKB] PREP - query='{str(query)[:80]}...', demuc='{demuc}', chu_de_con='{chu_de_con}'")
-        return query, user_role, demuc, chu_de_con
+        return query, demuc, chu_de_con
 
     def exec(self, inputs):
-        query, user_role, demuc, chu_de_con = inputs
-        logger.info("📚 [RetrieveFromKB] EXEC - Bắt đầu retrieve với expanded query")
+        query, demuc, chu_de_con = inputs
+        logger.info("📚 [RetrieveFromKB] EXEC - Bắt đầu retrieve từ Qdrant")
 
-        # Use only the main query (which may have been expanded)
-        retrieval_queries = []
-        if query:
-            retrieval_queries.append(query)
+        # Call Qdrant retrieval utility function
+        from utils.knowledge_base.qdrant_retrieval import retrieve_from_qdrant
 
-        # Use aggregate_retrievals helper function
-        retrieved_results, top_score = aggregate_retrievals(retrieval_queries, role=user_role, top_k=15)
+        # Retrieve with filters if available
+        retrieved_results = retrieve_from_qdrant(
+            query=query,
+            demuc=demuc if demuc else None,
+            chu_de_con=chu_de_con if chu_de_con else None,
+            top_k=20
+        )
 
-        # Log formatted QA list and score table
-        try:
-            formatted = format_kb_qa_list(retrieved_results, max_items=15)
-            if formatted:
-                logger.info("\n📚 [RetrieveFromKB] FORMATTED Top Results:\n" + formatted)
-        except Exception:
-            pass
+        # Calculate top score
+        top_score = retrieved_results[0]["score"] if retrieved_results else 0.0
 
+        # Log top results
         if retrieved_results:
-            lines = ["\n🏷️ [RetrieveFromKB] TOP SCORES (desc):"]
-            for i, it in enumerate(retrieved_results, 1):
-                lines.append(f"  {i}. score={float(it.get('score',0.0)):.4f} | Q: {str(it.get('cau_hoi',''))[:140]}")
+            lines = ["\n📚 [RetrieveFromKB] TOP SCORES:"]
+            for i, result in enumerate(retrieved_results[:5], 1):
+                lines.append(
+                    f"  {i}. score={result['score']:.4f} | "
+                    f"DEMUC={result['DEMUC']} | "
+                    f"Q: {result['CAUHOI'][:80]}..."
+                )
             logger.info("\n".join(lines))
 
-        logger.info(f"📚 [RetrieveFromKB] EXEC - Aggregated results={len(retrieved_results)}, top_score={top_score:.4f}")
+        logger.info(f"📚 [RetrieveFromKB] EXEC - Retrieved {len(retrieved_results)} results, top_score={top_score:.4f}")
         return retrieved_results, top_score
 
     def post(self, shared, prep_res, exec_res):
         logger.info("📚 [RetrieveFromKB] POST - Lưu kết quả retrieve")
-        results, score = exec_res
-        shared["retrieved"] = results
-        shared["retrieval_score"] = score
-        shared["need_clarify"] = score < get_score_threshold()
-        
-        # Update RAG state and route back to RagAgent
+
+        results, top_score = exec_res
+
+        # Save to shared store with new key name
+        shared["question_retrieved_list"] = results
+        shared["retrieval_score"] = top_score
+
+        # Update RAG state
         shared["rag_state"] = "retrieved"
+
         logger.info(
-            f"📚 [RetrieveFromKB] POST - Saved {len(results)} results, score: {score:.4f}, "
-            f"routing back to RagAgent"
+            f"📚 [RetrieveFromKB] POST - Saved {len(results)} results to 'question_retrieved_list', "
+            f"top_score={top_score:.4f}"
         )
+
         return "default" 
 
 class GreetingResponse(Node):
@@ -225,6 +230,12 @@ class ChitChatRespond(Node):
         return role, query, conversation_history
 
     def exec(self, inputs):
+        # Import dependencies only when needed
+        from utils.role_enum import PERSONA_BY_ROLE, ROLE_DESCRIPTION_BY_VALUE
+        from utils.llm import call_llm, PROMPT_CHITCHAT_RESPONSE
+        from utils.auth import APIOverloadException
+        from config.timeout_config import timeout_config
+
         role, query, conversation_history = inputs
         # Lấy 3 cặp gần nhất (6 tin)
         history_lines = []
@@ -284,20 +295,29 @@ class ComposeAnswer(Node):
         return (role, query, retrieved, score, conversation_history)
 
     def exec(self, inputs):
+        # Import dependencies only when needed
+        import time
+        from utils.role_enum import PERSONA_BY_ROLE
+        from utils.helpers import format_kb_qa_list, format_conversation_history
+        from utils.llm import call_llm, PROMPT_COMPOSE_ANSWER
+        from utils.parsing import parse_yaml_with_schema
+        from utils.auth import APIOverloadException
+        from config.timeout_config import timeout_config
+
         role, query, retrieved,  score, conversation_history = inputs
-        
+
         # Handle missing or invalid role with fallback
         if role not in PERSONA_BY_ROLE:
             logger.warning(f"✍️ [ComposeAnswer] EXEC - Invalid role '{role}', using default patient_diabetes role")
             role = "patient_diabetes"  # Default fallback role
-        
+
         persona = PERSONA_BY_ROLE[role]
         # Compact KB context
         relevant_info_from_kb = format_kb_qa_list(retrieved, max_items=6)
-        
+
         # Format conversation history
         formatted_history = format_conversation_history(conversation_history)
-        
+
         prompt = PROMPT_COMPOSE_ANSWER.format(
             ai_role=persona['persona'],
             audience=persona['audience'],
@@ -307,14 +327,14 @@ class ComposeAnswer(Node):
             conversation_history = formatted_history
         )
         logger.info(f"✍️ [ComposeAnswer] EXEC - prompt: {prompt}")
-        
+
         try:
             start_time = time.time()
             result = call_llm(prompt, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
             end_time = time.time()
-            
+
             # Log LLM timing
-            
+
             logger.info(f"✍️ [ComposeAnswer] EXEC - LLM response received")
             result = parse_yaml_with_schema(result, required_fields=["explanation", "suggestion_questions"], field_types={"explanation": str, "suggestion_questions": list})
             logger.info(f"✍️ [ComposeAnswer] EXEC - result: {result}")
@@ -323,9 +343,9 @@ class ComposeAnswer(Node):
                 logger.warning("[ComposeAnswer] EXEC - Invalid LLM response, using fallback")
                 resp = "Xin lỗi, tôi không thể tạo câu trả lời phù hợp lúc này. Bạn đặt câu hỏi khác được không? "
                 return {"explain": resp, "suggestion_questions": [], "preformatted": True}
-            
+
             return {"explain": result.get("explanation", ""), "suggestion_questions": result.get("suggestion_questions", []), "preformatted": True}
-        
+
         except APIOverloadException as e:
             logger.warning(f"✍️ [ComposeAnswer] EXEC - API overloaded, triggering fallback mode: {e}")
             # Return flag to indicate API overload - will be handled in post method
@@ -508,6 +528,12 @@ class QueryExpandAgent(Node):
         return query, role, demuc, chu_de_con, formatted_history
 
     def exec(self, inputs):
+        # Import dependencies only when needed
+        from utils.llm import call_llm
+        from utils.parsing import parse_yaml_with_schema
+        from utils.auth import APIOverloadException
+        from config.timeout_config import timeout_config
+
         query, role, demuc, chu_de_con, formatted_history = inputs
         logger.info(f"🔍 [QueryExpandAgent] EXEC - Query: '{query[:50]}...', DEMUC: '{demuc}', CHU_DE_CON: '{chu_de_con}'")
 
@@ -622,6 +648,12 @@ class MainDecisionAgent(Node):
         return query, role, formatted_history
 
     def exec(self, inputs):
+        # Import dependencies only when needed
+        from utils.llm import call_llm
+        from utils.parsing import parse_yaml_with_schema
+        from utils.auth import APIOverloadException
+        from config.timeout_config import timeout_config
+
         query, role, formatted_history = inputs
         logger.info("[MainDecision] EXEC - Classifying: RAG or chitchat")
 
@@ -717,6 +749,11 @@ class FallbackNode(Node):
         return query, role
 
     def exec(self, inputs):
+        # Import dependencies only when needed
+        from unidecode import unidecode
+        from utils.knowledge_base import get_kb, ROLE_TO_CSV, retrieve_random_by_role
+        from utils.helpers import aggregate_retrievals, format_kb_qa_list
+
         query, role = inputs
         logger.info(f"🔄 [FallbackNode] EXEC - Fallback search cho role: {role} với query: '{query[:50]}...'")
 
@@ -817,17 +854,17 @@ class FallbackNode(Node):
                     random_questions = retrieve_random_by_role(role, amount=5)
                     suggestion_questions = [q['cau_hoi'] for q in random_questions]
                     score = 0.0
-            
+
             result = {
                 "explain": explain,
                 "suggestion_questions": suggestion_questions,
                 "retrieval_score": score,
                 "preformatted": True
             }
-            
+
             logger.info(f"🔄 [FallbackNode] EXEC - Generated response with {len(suggestion_questions)} suggestions")
             return result
-            
+
         except Exception as e:
             logger.error(f"🔄 [FallbackNode] EXEC - Error during fallback: {e}")
             # Fallback tối thiểu
