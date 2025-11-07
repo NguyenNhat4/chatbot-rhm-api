@@ -1,12 +1,9 @@
-from pocketflow import Flow
-
-
 import logging
 
 # Configure logging for this module with Vietnam timezone
 from utils.timezone_utils import setup_vietnam_logging
 from config.logging_config import logging_config
-
+from pocketflow import Flow 
 if logging_config.USE_VIETNAM_TIMEZONE:
     logger = setup_vietnam_logging(__name__, 
                                  level=getattr(logging, logging_config.LOG_LEVEL.upper()),
@@ -76,3 +73,5 @@ def create_med_agent_flow():
 
 
 
+def create_oqa_orthodontist_flow():
+    return Flow(start=None)

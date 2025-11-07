@@ -12,14 +12,14 @@ from .medical_nodes import (
     ChitChatRespond,
 )
 
-from .oqa_nodes import (
-    OQAIngestDefaults,
-    OQAClassifyEN,
-    OQARetrieve,
-    OQAComposeAnswerVIWithSources,
-    OQAClarify,
-    OQAChitChat,
-)
+# from .oqa_nodes import (
+#     OQAIngestDefaults,
+#     OQAClassifyEN,
+#     OQARetrieve,
+#     OQAComposeAnswerVIWithSources,
+#     OQAClarify,
+#     OQAChitChat,
+# )
 
 __all__ = [
     # Medical nodes
@@ -31,10 +31,10 @@ __all__ = [
     "FallbackNode",
     "ChitChatRespond",
     # OQA nodes
-    "OQAIngestDefaults",
-    "OQAClassifyEN",
-    "OQARetrieve",
-    "OQAComposeAnswerVIWithSources",
-    "OQAClarify",
-    "OQAChitChat",
+    # "OQAIngestDefaults",
+    # "OQAClassifyEN",
+    # "OQARetrieve",
+    # "OQAComposeAnswerVIWithSources",
+    # "OQAClarify",
+    # "OQAChitChat",
 ]
