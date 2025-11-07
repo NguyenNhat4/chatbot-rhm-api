@@ -1,13 +1,6 @@
 from pocketflow import Flow
-from core.nodes.medical_nodes import (
-    IngestQuery, MainDecisionAgent, TopicClassifyAgent, QueryExpandAgent, 
-    RagAgent, RetrieveFromKB, ComposeAnswer, GreetingResponse, 
-    FallbackNode, ChitChatRespond,
-)
-from core.nodes.oqa_nodes import (
-    OQAIngestDefaults, OQAClassifyEN, OQARetrieve,
-    OQAComposeAnswerVIWithSources, OQAClarify, OQAChitChat
-)
+
+
 import logging
 
 # Configure logging for this module with Vietnam timezone
@@ -23,6 +16,11 @@ else:
     logger.setLevel(getattr(logging, logging_config.LOG_LEVEL.upper()))
 
 def create_med_agent_flow():
+    from core.nodes.medical_nodes import (
+    IngestQuery, MainDecisionAgent, TopicClassifyAgent, QueryExpandAgent, 
+    RagAgent, RetrieveFromKB, ComposeAnswer, GreetingResponse, 
+    FallbackNode, ChitChatRespond,
+    )
     logger.info("[Flow] Tạo medical agent flow với RagAgent làm decision maker chính")
 
     # Create nodes
@@ -77,30 +75,4 @@ def create_med_agent_flow():
     return flow
 
 
-
-def create_oqa_orthodontist_flow():
-    logger.info("[Flow] Tạo OQA orthodontist flow với nodes độc lập")
-
-    # Create independent OQA nodes (no reuse from old flow)
-    ingest = OQAIngestDefaults()
-    classify = OQAClassifyEN()
-    retrieve = OQARetrieve()
-    compose = OQAComposeAnswerVIWithSources()
-    clarify = OQAClarify()
-    chitchat = OQAChitChat()  # OQA-specific chitchat
-
-    # Wire the flow (no fallback node)
-    ingest >> classify
-    classify - "retrieve_kb" >> retrieve
-    classify - "chitchat" >> chitchat
-
-    retrieve >> score
-    score - "compose_answer" >> compose
-    score - "clarify" >> clarify
-
-    # All terminal nodes (no fallback routing)
-    
-    flow = Flow(start=ingest)
-    logger.info("[Flow] OQA orthodontist flow với nodes độc lập đã được tạo thành công")
-    return flow
 
