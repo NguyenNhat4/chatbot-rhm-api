@@ -17,24 +17,35 @@ def get_demuc_list_for_role(role: str) -> List[str]:
     """
     Get list of DEMUC (topics) available for a role.
 
-    Input: role (str) - e.g., "patient_diabetes"
-    Output: List of DEMUC names
+    READS DIRECTLY FROM CSV based on role mapping (same source as Qdrant data).
+
+    Input: role (str) - e.g., "patient_diabetes", "patient_dental"
+    Output: List of DEMUC names for that role's CSV file
 
     Example output:
-    ["BỆNH LÝ ĐTĐ", "DINH DƯỠNG", "ĐIỀU TRỊ"]
+    ["BỆNH ĐÁI THÁO ĐƯỜNG", "BỆNH LÝ RĂNG MIỆNG", ...]
 
     Necessity: Used by TopicClassifyAgent for FULL classification
                to show LLM all available DEMUC options
     """
     try:
-        from utils.knowledge_base.kb import get_df_metadata_for_role
+        from utils.role_enum import ROLE_TO_CSV
 
-        df_metadata = get_df_metadata_for_role(role)
+        # Get CSV file for this role
+        csv_file = ROLE_TO_CSV.get(role)
+
+        if not csv_file:
+            logger.warning(f"No CSV file mapping found for role '{role}'")
+            return []
+
+        # Read directly from role-specific CSV (same source as Qdrant)
+        csv_path = f"medical_knowledge_base/{csv_file}"
+        df = pd.read_csv(csv_path, encoding="utf-8-sig")
 
         # Get unique DEMUC list
-        demuc_list = df_metadata["DEMUC"].unique().tolist()
+        demuc_list = sorted(df["DEMUC"].unique().tolist())
 
-        logger.info(f"Loaded {len(demuc_list)} DEMUCs for role '{role}': {demuc_list}")
+        logger.info(f"Loaded {len(demuc_list)} DEMUCs from {csv_file} for role '{role}': {demuc_list}")
         return demuc_list
 
     except Exception as e:
@@ -46,32 +57,43 @@ def get_chu_de_con_for_demuc(role: str, demuc: str) -> List[str]:
     """
     Get list of CHU_DE_CON (subtopics) for a specific DEMUC within a role.
 
+    READS DIRECTLY FROM CSV based on role mapping (same source as Qdrant data).
+
     Input:
-        - role (str): e.g., "patient_diabetes"
-        - demuc (str): e.g., "BỆNH LÝ ĐTĐ"
+        - role (str): e.g., "patient_diabetes", "patient_dental"
+        - demuc (str): e.g., "BỆNH ĐÁI THÁO ĐƯỜNG"
 
     Output: List of CHU_DE_CON names
 
     Example output:
-    ["Định nghĩa và phân loại", "Triệu chứng", "Chẩn đoán"]
+    ["Định nghĩa", "Biến chứng", "ĐTĐ type 1", ...]
 
     Necessity: Used by TopicClassifyAgent for DEMUC-ONLY classification
                when DEMUC is already known, only need to choose CHU_DE_CON
     """
     try:
-        from utils.knowledge_base.kb import get_df_metadata_for_role
+        from utils.role_enum import ROLE_TO_CSV
 
-        df_metadata = get_df_metadata_for_role(role)
+        # Get CSV file for this role
+        csv_file = ROLE_TO_CSV.get(role)
 
-        # Filter for specific DEMUC and get CHU_DE_CON list
-        filtered_df = df_metadata[df_metadata["DEMUC"] == demuc]
-        chu_de_con_list = filtered_df["CHUDECON"].tolist()
+        if not csv_file:
+            logger.warning(f"No CSV file mapping found for role '{role}'")
+            return []
 
-        logger.info(f"Loaded {len(chu_de_con_list)} CHU_DE_CON for DEMUC '{demuc}' in role '{role}'")
+        # Read directly from role-specific CSV (same source as Qdrant)
+        csv_path = f"medical_knowledge_base/{csv_file}"
+        df = pd.read_csv(csv_path, encoding="utf-8-sig")
+
+        # Filter for specific DEMUC and get unique CHU_DE_CON list
+        filtered_df = df[df["DEMUC"] == demuc]
+        chu_de_con_list = sorted(filtered_df["CHUDECON"].unique().tolist())
+
+        logger.info(f"Loaded {len(chu_de_con_list)} CHU_DE_CON for DEMUC '{demuc}' from {csv_file}")
         return chu_de_con_list
 
     except Exception as e:
-        logger.warning(f"Could not load CHU_DE_CON for DEMUC '{demuc}' in role '{role}': {e}")
+        logger.warning(f"Could not load CHU_DE_CON for DEMUC '{demuc}' from role '{role}': {e}")
         return []
 
 

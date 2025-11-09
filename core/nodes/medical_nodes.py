@@ -60,97 +60,222 @@ class RagAgent(Node):
         demuc = shared.get("demuc", "")
         chu_de_con = shared.get("chu_de_con", "")
         rag_state = shared.get("rag_state", "init")
-        retrieved = shared.get("retrieved", [])
-        
-        logger.info(f"🤖 [RagAgent] PREP - state='{rag_state}', query='{query[:50]}...', demuc='{demuc}', chu_de_con='{chu_de_con}'")
-        return query, user_role, demuc, chu_de_con, rag_state, retrieved
+        retrieved_candidates = shared.get("retrieved_candidates", [])
+        selected_ids = shared.get("selected_ids", [])
+        expansion_tried = shared.get("expansion_tried", False)
+        retrieve_attempts = shared.get("retrieve_attempts", 0)
+
+        # Load filtered questions (selected by FilterAgent)
+        filtered_questions = []
+        if selected_ids and retrieved_candidates:
+            # Map selected IDs to actual questions
+            candidate_map = {c["id"]: c["CAUHOI"] for c in retrieved_candidates}
+            filtered_questions = [
+                {"id": qid, "question": candidate_map.get(qid, "")}
+                for qid in selected_ids
+                if qid in candidate_map
+            ]
+
+        logger.info(f"🤖 [RagAgent] PREP - state='{rag_state}', query='{query[:50]}...', {len(filtered_questions)} filtered questions, attempts={retrieve_attempts}")
+        return query, user_role, demuc, chu_de_con, rag_state, filtered_questions, expansion_tried, retrieve_attempts
 
     def exec(self, inputs):
-        query, user_role, demuc, chu_de_con, rag_state, retrieved = inputs
-        logger.info(f"🤖 [RagAgent] EXEC - Current state: {rag_state}")
+        from utils.llm import call_llm
+        from utils.parsing import parse_yaml_with_schema
+        from utils.auth import APIOverloadException
+        from config.timeout_config import timeout_config
 
-        # State machine logic
-        if rag_state == "init":
-            # First time - decide if we need topic classification
-            if not demuc and not chu_de_con:
-                logger.info("🤖 [RagAgent] No metadata - need topic classification")
-                return {"next_action": "classify", "reason": "No DEMUC/CHU_DE_CON available"}
-            else:
-                # Has some metadata - check if need expansion
-                logger.info("🤖 [RagAgent] Has metadata - checking if need expansion")
-                return self._check_expansion_need(query, demuc, chu_de_con)
-        
-        elif rag_state == "classified":
-            # After classification - check if need query expansion
-            logger.info("🤖 [RagAgent] After classification - checking if need expansion")
-            return self._check_expansion_need(query, demuc, chu_de_con)
-        
-        elif rag_state == "expanded":
-            # After expansion - proceed to retrieve
-            logger.info("🤖 [RagAgent] After expansion - ready to retrieve")
-            return {"next_action": "retrieve", "reason": "Query expanded, ready to retrieve"}
-        
-        elif rag_state == "retrieved":
-            # After retrieval - compose answer
-            logger.info("🤖 [RagAgent] After retrieval - ready to compose answer")
-            return {"next_action": "compose_answer", "reason": "Retrieved data available"}
-        
-        else:
-            # Unknown state - default to retrieve
-            logger.warning(f"🤖 [RagAgent] Unknown state '{rag_state}' - defaulting to retrieve")
-            return {"next_action": "retrieve", "reason": "Unknown state - fallback"}
+        query, user_role, demuc, chu_de_con, rag_state, filtered_questions, expansion_tried, retrieve_attempts = inputs
+        logger.info(f"🤖 [RagAgent] EXEC - Current state: {rag_state}, {len(filtered_questions)} questions, attempts: {retrieve_attempts}")
 
-    def _check_expansion_need(self, query: str, demuc: str, chu_de_con: str) -> dict:
-        """Check if query needs expansion based on query length and metadata availability"""
-        
-        # If we have both DEMUC and CHU_DE_CON and query is reasonably specific
-        if demuc and chu_de_con and len(query.split()) >= 4:
-            logger.info("🤖 [RagAgent] Have full metadata and specific query - no expansion needed")
-            return {"next_action": "retrieve", "reason": "Full metadata + specific query"}
-        
-        # If query is very short or vague
-        if len(query.split()) < 4:
-            logger.info("🤖 [RagAgent] Query too short/vague - need expansion")
-            return {"next_action": "expand", "reason": "Query too short or vague"}
-        
-        # Default: proceed to retrieve
-        logger.info("🤖 [RagAgent] Query acceptable - proceeding to retrieve")
-        return {"next_action": "retrieve", "reason": "Query acceptable as-is"}
+        # Format filtered questions for LLM
+        questions_str = ""
+        if filtered_questions:
+            questions_str = "\n".join([
+                f"{i}. {q['question'][:80]}..." if len(q['question']) > 80 else f"{i}. {q['question']}"
+                for i, q in enumerate(filtered_questions, 1)
+            ])
+
+        # Build context
+        context = f"""Query: "{query}"
+Metadata: DEMUC="{demuc}", CHU_DE_CON="{chu_de_con}"
+State: {rag_state}
+Retrieve attempts: {retrieve_attempts}/2
+
+Filtered questions ({len(filtered_questions)}):
+{questions_str if questions_str else "(none)"}"""
+
+
+        prompt = f"""RAG Agent quyết định bước tiếp.
+
+{context}
+
+Actions:
+- retry_retrieve: Thử lại retrieval
+- compose_answer: Soạn trả lời
+
+Rules:
+1. Nếu attempts >= 2 → BẮT BUỘC compose_answer (đã hết lượt retry)
+2. Nếu có đủ câu hỏi (≥ 2) → compose_answer
+3. Nếu không có câu hỏi + attempts < 2 → retry_retrieve
+
+YAML:
+```yaml
+next_action: "..."
+reason: "..."
+```"""
+
+        try:
+            resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
+
+            result = parse_yaml_with_schema(
+                resp,
+                required_fields=["next_action", "reason"],
+                field_types={"next_action": str, "reason": str}
+            )
+
+            # Validate action
+            valid_actions = ["retry_retrieve", "compose_answer"]
+            if result["next_action"] not in valid_actions:
+                raise ValueError(f"Invalid action: {result['next_action']}")
+
+            logger.info(f"🤖 [RagAgent] Decision: {result['next_action']} - {result['reason']}")
+            return result
+
+        except APIOverloadException:
+            logger.error("🤖 [RagAgent] API overloaded")
+            raise
+        except Exception as e:
+            logger.error(f"🤖 [RagAgent] Error: {e}")
+            raise
 
     def post(self, shared, prep_res, exec_res):
         next_action = exec_res["next_action"]
         reason = exec_res.get("reason", "")
-        
-        logger.info(f"🤖 [RagAgent] POST - Next action: '{next_action}' | Reason: {reason}")
-        
+        current_attempts = shared.get("retrieve_attempts", 0)
+
+        logger.info(f"🤖 [RagAgent] POST - Next action: '{next_action}' | Reason: {reason} | Current attempts: {current_attempts}")
+
         # Update state based on next action
-        if next_action == "classify":
-            shared["rag_state"] = "init"  # Will be updated to "classified" by TopicClassifyAgent
-            return "classify"
-        elif next_action == "expand":
-            shared["rag_state"] = "classified"  # Will be updated to "expanded" by QueryExpandAgent
-            return "expand"
-        elif next_action == "retrieve":
-            shared["rag_state"] = "expanded"  # Will be updated to "retrieved" by RetrieveFromKB
-            return "retrieve"
+        if next_action == "retry_retrieve":
+            # Increment retrieve attempts counter
+            shared["retrieve_attempts"] = current_attempts + 1
+            shared["rag_state"] = "init"  # Reset to init for retrieve_flow to start fresh
+            logger.info(f"🤖 [RagAgent] POST - Retrying retrieval pipeline (attempt {current_attempts + 1}/2)")
+            return "retry_retrieve"
         elif next_action == "compose_answer":
-            shared["rag_state"] = "retrieved"
+            shared["rag_state"] = "composing"
+            logger.info("🤖 [RagAgent] POST - Proceeding to compose answer")
             return "compose_answer"
         else:
-            logger.warning(f"🤖 [RagAgent] POST - Unknown action '{next_action}', defaulting to retrieve")
-            return "retrieve"
+            logger.warning(f"🤖 [RagAgent] POST - Unknown action '{next_action}', defaulting to compose_answer")
+            return "compose_answer"
+
+
+class FilterAgent(Node):
+    """
+    Filter candidates using LLM semantic understanding.
+
+    Selects most relevant questions from candidates.
+    Output: selected_ids (list of IDs)
+    """
+
+    def prep(self, shared):
+        logger.info("🔍 [FilterAgent] PREP - Reading query and candidates")
+        query = shared.get("query", "")
+        candidates = shared.get("retrieved_candidates", [])
+
+        logger.info(f"🔍 [FilterAgent] PREP - Query: '{query[:50]}...', Candidates: {len(candidates)}")
+        return query, candidates
+
+    def exec(self, inputs):
+        from utils.llm import call_llm
+        from utils.parsing import parse_yaml_with_schema
+        from utils.auth import APIOverloadException
+        from config.timeout_config import timeout_config
+
+        query, candidates = inputs
+        logger.info(f"🔍 [FilterAgent] EXEC - Filtering {len(candidates)} candidates")
+
+        # Handle empty candidates
+        if not candidates:
+            logger.warning("🔍 [FilterAgent] EXEC - No candidates to filter")
+            return []
+
+        # Handle very few candidates (≤ 3) - return all
+        if len(candidates) <= 3:
+            logger.info(f"🔍 [FilterAgent] EXEC - Only {len(candidates)} candidates, returning all")
+            return [c["id"] for c in candidates]
+
+        # Format candidates for LLM
+        candidate_list_str = self._format_candidates(candidates)
+
+        prompt = f"""Chọn tối đa 6 câu hỏi liên quan nhất để trả lời user.
+
+User: "{query}"
+
+Candidates:
+{candidate_list_str}
+
+YAML:
+```yaml
+selected_ids: [...]
+```"""
+
+        try:
+            resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
+
+            result = parse_yaml_with_schema(
+                resp,
+                required_fields=["selected_ids"],
+                field_types={"selected_ids": list}
+            )
+
+            if result and result["selected_ids"]:
+                # Cap at 6
+                selected_ids = result["selected_ids"][:6]
+                logger.info(f"🔍 [FilterAgent] EXEC - Selected {len(selected_ids)} IDs")
+                return selected_ids
+            else:
+                # Fallback: top 6
+                logger.warning("🔍 [FilterAgent] EXEC - LLM parsing failed, using top 6")
+                return [c["id"] for c in candidates[:6]]
+
+        except (APIOverloadException, Exception) as e:
+            logger.warning(f"🔍 [FilterAgent] EXEC - Error: {e}, using top 6")
+            return [c["id"] for c in candidates[:6]]
+
+    def _format_candidates(self, candidates: list) -> str:
+        """Format candidates compactly for LLM prompt"""
+        lines = []
+        for i, c in enumerate(candidates, 1):
+            question = c["CAUHOI"][:100] + "..." if len(c["CAUHOI"]) > 100 else c["CAUHOI"]
+            lines.append(f"{i}. ID={c['id']}: \"{question}\"")
+        return "\n".join(lines)
+
+    def post(self, shared, prep_res, exec_res):
+        # exec_res is just a list of IDs
+        selected_ids = exec_res if isinstance(exec_res, list) else []
+
+        # Save to shared store
+        shared["selected_ids"] = selected_ids
+        shared["rag_state"] = "filtered"
+
+        logger.info(f"🔍 [FilterAgent] POST - Saved {len(selected_ids)} IDs")
+
+        return "default"
 
 
 class RetrieveFromKB(Node):
     """
     Retrieve relevant QA pairs from Qdrant vector database using hybrid search.
 
-    Refactored to follow PocketFlow best practices:
-    - prep(): Read from shared store ONLY
-    - exec(): Call Qdrant retrieval utility function
-    - post(): Write to shared store ONLY
+    ID-based architecture - no scoring needed (FilterAgent handles semantic filtering):
+    - prep(): Read query and metadata from shared
+    - exec(): Call Qdrant retrieval utility
+    - post(): Write lightweight {id, CAUHOI} to shared
 
-    Output: shared["question_retrieved_list"] - list of retrieved QA pairs
+    Output: shared["retrieved_candidates"] - list of lightweight candidates
     """
 
     def prep(self, shared):
@@ -179,39 +304,39 @@ class RetrieveFromKB(Node):
             top_k=20
         )
 
-        # Calculate top score
-        top_score = retrieved_results[0]["score"] if retrieved_results else 0.0
+        # Extract lightweight candidates: {id, CAUHOI}
+        candidates = [
+            {
+                "id": result["id"],
+                "CAUHOI": result["CAUHOI"]
+            }
+            for result in retrieved_results
+        ]
 
         # Log top results
-        if retrieved_results:
-            lines = ["\n📚 [RetrieveFromKB] TOP SCORES:"]
-            for i, result in enumerate(retrieved_results[:5], 1):
+        if candidates:
+            lines = ["\n📚 [RetrieveFromKB] TOP CANDIDATES:"]
+            for i, candidate in enumerate(candidates[:5], 1):
                 lines.append(
-                    f"  {i}. score={result['score']:.4f} | "
-                    f"DEMUC={result['DEMUC']} | "
-                    f"Q: {result['CAUHOI'][:80]}..."
+                    f"  {i}. id={candidate['id']} | Q: {candidate['CAUHOI'][:80]}..."
                 )
             logger.info("\n".join(lines))
 
-        logger.info(f"📚 [RetrieveFromKB] EXEC - Retrieved {len(retrieved_results)} results, top_score={top_score:.4f}")
-        return retrieved_results, top_score
+        logger.info(f"📚 [RetrieveFromKB] EXEC - Retrieved {len(candidates)} candidates")
+        return candidates
 
     def post(self, shared, prep_res, exec_res):
         logger.info("📚 [RetrieveFromKB] POST - Lưu kết quả retrieve")
 
-        results, top_score = exec_res
+        candidates = exec_res
 
-        # Save to shared store with new key name
-        shared["question_retrieved_list"] = results
-        shared["retrieval_score"] = top_score
+        # Save lightweight candidates to shared store
+        shared["retrieved_candidates"] = candidates
 
         # Update RAG state
         shared["rag_state"] = "retrieved"
 
-        logger.info(
-            f"📚 [RetrieveFromKB] POST - Saved {len(results)} results to 'question_retrieved_list', "
-            f"top_score={top_score:.4f}"
-        )
+        logger.info(f"📚 [RetrieveFromKB] POST - Saved {len(candidates)} candidates to 'retrieved_candidates'")
 
         return "default" 
 
@@ -284,15 +409,30 @@ class ChitChatRespond(Node):
             return "fallback"
         return "default"
 
+
+
 class ComposeAnswer(Node):
     def prep(self, shared):
+        # Import dependencies
+        from utils.knowledge_base.qdrant_retrieval import get_full_qa_by_ids
+
         role = shared.get("role", "")
         query = shared.get("query", "")
-        retrieved = shared.get("retrieved", [])
+        selected_ids = shared.get("selected_ids", [])
         score = shared.get("retrieval_score", 0.0)
         conversation_history = shared.get("conversation_history", [])
-        logger.info(f"✍️ [ComposeAnswer] PREP - Role: '{role}', Query: '{query[:50]}...', Retrieved: {len(retrieved)} items")
-        return (role, query, retrieved, score, conversation_history)
+
+        logger.info(f"✍️ [ComposeAnswer] PREP - Role: '{role}', Query: '{query[:50]}...', Selected IDs: {selected_ids}")
+
+        # Fetch full QA data from Qdrant using IDs
+        if selected_ids:
+            retrieved_qa = get_full_qa_by_ids(selected_ids)
+            logger.info(f"✍️ [ComposeAnswer] PREP - Retrieved {len(retrieved_qa)} full QA pairs from Qdrant")
+        else:
+            logger.warning("✍️ [ComposeAnswer] PREP - No selected IDs, using empty list")
+            retrieved_qa = []
+
+        return (role, query, retrieved_qa, score, conversation_history)
 
     def exec(self, inputs):
         # Import dependencies only when needed
@@ -655,89 +795,81 @@ class MainDecisionAgent(Node):
         from config.timeout_config import timeout_config
 
         query, role, formatted_history = inputs
-        logger.info("[MainDecision] EXEC - Classifying: RAG or chitchat")
+        logger.info("[MainDecision] EXEC - Deciding and responding")
 
-        # Simplified prompt: only decide between RAG and chitchat
-        prompt = f"""
-Phân loại DUY NHẤT input thành một trong: medical_question | chitchat.
+        # Prompt: decide type AND generate response if direct_response
+        prompt = f"""Bạn là trợ lý y tế nha khoa và nội tiết. Phân tích câu hỏi và quyết định.
 
-Định nghĩa:
-- medical_question: BẤT KỲ câu hỏi nào liên quan đến kiến thức y khoa (dù rõ ràng hay mơ hồ) - cần tra cứu cơ sở tri thức (RAG).
-- chitchat: chỉ chào hỏi/trò chuyện xã giao KHÔNG LIÊN QUAN đến y khoa.
+Câu hỏi: "{query}"
 
-Ví dụ medical_question (bao gồm cả câu hỏi mơ hồ):
-- "Triệu chứng của bệnh đái tháo đường type 2 là gì?" (cụ thể)
-- "Tôi muốn hỏi về bệnh" (mơ hồ nhưng vẫn là medical_question)
-- "Cho tôi biết về điều trị" (mơ hồ nhưng vẫn là medical_question)
-- "Làm sao để chăm sóc răng miệng?" (medical_question)
-- "Có thông tin gì về đái tháo đường?" (medical_question)
+Hành động:
+- direct_response: trao đổi xuồng sả.  
+- retrieve_kb: câu hỏi về y tế cần tra kiến thức y tế. 
 
-Ví dụ chitchat:
-- "Xin chào"
-- "Cảm ơn bạn"
-- "Tạm biệt"
-- "Bạn khỏe không?"
-
-QUAN TRỌNG: Nếu câu hỏi có BẤT KỲ yếu tố y khoa nào (dù mơ hồ), phân loại là medical_question.
-
-Ngữ cảnh hội thoại gần đây:
-{formatted_history}
-
-Input của user: "{query}"
-Role của user: {role}
-
-Trả về CHỈ một code block YAML hợp lệ:
-
+Trả về YAML:
 ```yaml
-type: medical_question  # hoặc chitchat
-confidence: high  # hoặc medium, low
-reason: "Lý do ngắn gọn"
+type: direct_response
+explanation: "Câu trả lời của bạn ở đây"
 ```
-"""
+
+HOẶC nếu cần tra KB:
+```yaml
+type: retrieve_kb
+explanation: ""
+```"""
 
         try:
             resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
 
-            logger.info(f"[MainDecision] EXEC - resp: {resp}")
             result = parse_yaml_with_schema(
                 resp,
                 required_fields=["type"],
-                optional_fields=["confidence", "reason"],
-                field_types={"type": str, "confidence": str, "reason": str}
+                optional_fields=["explanation"],
+                field_types={"type": str, "explanation": str}
             )
-            logger.info(f"[MainDecision] EXEC - result after parse: {result}")
 
-            if result:
-                logger.info(f"[MainDecision] EXEC - LLM classification: {result}")
-                return result
+            decision_type = result.get("type", "")
+            explanation = result.get("explanation", "")
+
+            logger.info(f"[MainDecision] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}")
+
+            return {"type": decision_type, "explanation": explanation}
+
         except APIOverloadException as e:
             logger.warning(f"[MainDecision] EXEC - API overloaded, triggering fallback: {e}")
-            return {"type": "api_overload", "confidence": "high"}
+            return {"type": "api_overload", "explanation": ""}
         except Exception as e:
             logger.warning(f"[MainDecision] EXEC - LLM classification failed: {e}")
-
-        return {"type": "default", "confidence": "high"}
+            return {"type": "default", "explanation": ""}
 
     def post(self, shared, prep_res, exec_res):
         logger.info(f"[MainDecision] POST - Classification result: {exec_res}")
-        shared["input_type"] = exec_res["type"]
-        shared["classification_confidence"] = exec_res.get("confidence", "low")
-        shared["classification_reason"] = exec_res.get("reason", "")
+        input_type = exec_res.get("type", "")
+        explanation = exec_res.get("explanation", "")
 
-        # Route based on classification - ONLY two options
-        input_type = exec_res["type"]
-
-        if input_type == "medical_question":
-            logger.info("[MainDecision] POST - Medical question detected, routing to RAG")
+        # Save explanation to shared if direct_response
+        if input_type == "direct_response" and explanation:
+            shared["answer_obj"] = {
+                "explain": explanation,
+                "preformatted": True,
+                "suggestion_questions": []
+            }
+            shared["explain"] = explanation
+            shared["suggestion_questions"] = []
+            logger.info(f"[MainDecision] POST - Direct response saved to 'explain': {explanation[:80]}...")
+            return "direct_response"
+        elif input_type == "retrieve_kb":
+            # Initialize retrieve attempts counter for RAG pipeline
+            shared["retrieve_attempts"] = 0
+            logger.info("[MainDecision] POST - Complex question, routing to retrieve_kb (attempts=0)")
             return "retrieve_kb"
-        elif input_type == "chitchat":
-            logger.info("[MainDecision] POST - Chitchat detected, routing to chitchat handler")
-            return "chitchat"
         elif input_type == "api_overload" or input_type == "default":
+            logger.warning("[MainDecision] POST - API issue, routing to fallback")
             return "fallback"
         else:
-            # Fallback mặc định
-            return "chitchat"
+            # Fallback: if unknown type or no explanation, route to fallback
+            logger.warning(f"[MainDecision] POST - Unknown type '{input_type}', routing to fallback")
+            return "fallback"
 
 class FallbackNode(Node):
     """Node fallback khi API quá tải - retrieve query và trả kết quả dựa trên score"""

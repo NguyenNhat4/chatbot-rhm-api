@@ -12,63 +12,92 @@ else:
     logger = logging.getLogger(__name__)
     logger.setLevel(getattr(logging, logging_config.LOG_LEVEL.upper()))
 
+def create_retrieve_flow(fallback_node):
+    """
+    Create a reusable retrieval sub-flow: topic_classify → retrieve_kb → filter_agent
+
+    This flow handles:
+    1. Topic classification (2-step: DEMUC → CHU_DE_CON)
+    2. Retrieval from knowledge base
+    3. Filtering candidates
+
+    Args:
+        fallback_node: The parent flow's fallback node to route errors to
+
+    Returns:
+        Flow: A flow that starts with topic_classify
+    """
+    from core.nodes.medical_nodes import TopicClassifyAgent, RetrieveFromKB, FilterAgent
+
+    logger.info("[retrieve_flow] Creating retrieval sub-flow")
+
+    # Create retrieval pipeline nodes
+    topic_classify = TopicClassifyAgent()
+    retrieve_kb = RetrieveFromKB()
+    filter_agent = FilterAgent()
+
+    # Connect retrieval pipeline
+    # topic_classify handles 2-step classification with "classify_again" loop
+    topic_classify >> retrieve_kb
+    topic_classify - "classify_again" >> topic_classify  # Loop for 2-step classification
+    topic_classify - "fallback" >> fallback_node
+
+    # retrieve_kb → filter_agent
+    retrieve_kb >> filter_agent
+    retrieve_kb - "fallback" >> fallback_node
+
+    # filter_agent → default (will return to parent flow)
+    filter_agent - "fallback" >> fallback_node
+
+    retrieve_flow = Flow(start=topic_classify)
+    logger.info("[retrieve_flow] Retrieval sub-flow created: topic_classify → retrieve_kb → filter_agent")
+    return retrieve_flow
+
+
 def create_med_agent_flow():
     from core.nodes.medical_nodes import (
-    IngestQuery, MainDecisionAgent, TopicClassifyAgent, QueryExpandAgent, 
-    RagAgent, RetrieveFromKB, ComposeAnswer, GreetingResponse, 
-    FallbackNode, ChitChatRespond,
+    IngestQuery, MainDecisionAgent, RagAgent, ComposeAnswer,
+    FallbackNode,
     )
-    logger.info("[Flow] Tạo medical agent flow với RagAgent làm decision maker chính")
+    logger.info("[Flow] Tạo medical agent flow với retrieve_flow sub-flow")
 
     # Create nodes
     ingest = IngestQuery()
     main_decision = MainDecisionAgent()
-    rag_agent = RagAgent()
-    topic_classify = TopicClassifyAgent()
-    query_expand = QueryExpandAgent()
-    retrieve_kb = RetrieveFromKB()
-    compose_answer = ComposeAnswer()
     fallback = FallbackNode()
-    chitchat = ChitChatRespond()
-    
-    logger.info("[Flow] Kết nối nodes theo flow mới: Ingest → MainDecision → RagAgent (orchestrator)")
+
+    # Create retrieve_flow sub-flow (pass fallback node for error routing)
+    retrieve_flow = create_retrieve_flow(fallback)
+
+    # Create decision and answer nodes
+    rag_agent = RagAgent()
+    compose_answer = ComposeAnswer()
+
+    logger.info("[Flow] Kết nối nodes: Ingest → MainDecision → [STOP if direct_response OR retrieve_flow → RagAgent → ComposeAnswer]")
 
     # Step 1: Ingest → MainDecision
     ingest >> main_decision
 
-    # Step 2: From MainDecision - route to RagAgent or Chitchat
-    main_decision - "retrieve_kb" >> rag_agent
-    main_decision - "chitchat" >> chitchat
+    # Step 2: From MainDecision
+    # - direct_response: Answer already saved in shared by MainDecision, flow stops (no next node)
+    # - retrieve_kb: Continue to retrieve_flow
+    main_decision - "retrieve_kb" >> retrieve_flow
     main_decision - "fallback" >> fallback
+    # Note: "direct_response" action has NO connection → flow ends, answer already in shared
 
-    # Step 3: RagAgent orchestrates the pipeline
-    # RagAgent can route to: classify, expand, retrieve, or compose_answer
-    
-    # Route to TopicClassifyAgent for metadata extraction
-    rag_agent - "classify" >> topic_classify
-    topic_classify >> rag_agent  # Route back to RagAgent
-    topic_classify - "fallback" >> fallback
-    
-    # Route to QueryExpandAgent for query expansion
-    rag_agent - "expand" >> query_expand
-    query_expand >> rag_agent  # Route back to RagAgent
-    query_expand - "fallback" >> fallback
-    
-    # Route to RetrieveFromKB for data retrieval
-    rag_agent - "retrieve" >> retrieve_kb
-    retrieve_kb >> rag_agent  # Route back to RagAgent
-    
-    # Route to ComposeAnswer when ready
+    # Step 3: retrieve_flow → rag_agent (rag_agent decides next step)
+    retrieve_flow >> rag_agent
+
+    # Step 4: RagAgent routing
+    rag_agent - "retry_retrieve" >> retrieve_flow  # Loop back for more retrieval
     rag_agent - "compose_answer" >> compose_answer
-    compose_answer - "fallback" >> fallback
-    # compose_answer with "default" action is terminal
+    rag_agent - "fallback" >> fallback
 
-    # ChitChat can route to fallback if API overloaded
-    chitchat - "fallback" >> fallback
-    # chitchat with "default" action is terminal
+    # compose_answer (terminal)
+    compose_answer - "fallback" >> fallback
 
     flow = Flow(start=ingest)
-    logger.info("[Flow] Medical agent flow mới với RagAgent orchestrator đã được tạo thành công")
+    logger.info("[Flow] Medical agent flow với retrieve_flow sub-flow đã được tạo thành công")
     return flow
 
 
