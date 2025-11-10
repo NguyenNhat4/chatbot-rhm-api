@@ -21,6 +21,15 @@ class ComposeAnswer(Node):
     def prep(self, shared):
         # Import dependencies
         from utils.knowledge_base.qdrant_retrieval import get_full_qa_by_ids
+        from utils.role_enum import RoleEnum
+
+        # Role to collection mapping
+        ROLE_TO_COLLECTION = {
+            RoleEnum.PATIENT_DIABETES.value: "bndtd",
+            RoleEnum.DOCTOR_ENDOCRINE.value: "bsnt",
+            RoleEnum.PATIENT_DENTAL.value: "bnrhm",
+            RoleEnum.DOCTOR_DENTAL.value: "bsrhm",
+        }
 
         role = shared.get("role", "")
         query = shared.get("query", "")
@@ -28,11 +37,14 @@ class ComposeAnswer(Node):
         score = shared.get("retrieval_score", 0.0)
         conversation_history = shared.get("conversation_history", [])
 
-        logger.info(f"✍️ [ComposeAnswer] PREP - Role: '{role}', Query: '{query[:50]}...', Selected IDs: {selected_ids}")
+        # Map role to collection name
+        collection_name = ROLE_TO_COLLECTION.get(role, "bnrhm")
+
+        logger.info(f"✍️ [ComposeAnswer] PREP - Role: '{role}' -> Collection: '{collection_name}', Query: '{query[:50]}...', Selected IDs: {selected_ids}")
 
         # Fetch full QA data from Qdrant using IDs
         if selected_ids:
-            retrieved_qa = get_full_qa_by_ids(selected_ids)
+            retrieved_qa = get_full_qa_by_ids(selected_ids, collection_name=collection_name)
             logger.info(f"✍️ [ComposeAnswer] PREP - Retrieved {len(retrieved_qa)} full QA pairs from Qdrant")
         else:
             logger.warning("✍️ [ComposeAnswer] PREP - No selected IDs, using empty list")

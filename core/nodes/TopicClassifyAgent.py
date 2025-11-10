@@ -33,15 +33,12 @@ class TopicClassifyAgent(Node):
     """
 
     def prep(self, shared):
-        logger.info("🏷️ [TopicClassifyAgent] PREP - Đọc query và metadata từ shared")
 
         # Read ALL data from shared store - no external calls
         query = shared.get("query", "").strip()
         role = shared.get("role", "")
         current_demuc = shared.get("demuc", "")
         current_chu_de_con = shared.get("chu_de_con", "")
-
-        logger.info(f"🏷️ [TopicClassifyAgent] PREP - Role: '{role}', Query: '{query[:50]}...', DEMUC: '{current_demuc}'")
 
         return query, role, current_demuc, current_chu_de_con
 
@@ -55,7 +52,6 @@ class TopicClassifyAgent(Node):
         from utils.llm.classify_topic import classify_demuc_with_llm
 
         # Only classify DEMUC (no CHU_DE_CON classification)
-        logger.info(f"🏷️ [TopicClassifyAgent] EXEC - Classifying DEMUC for query: '{query[:50]}...'")
 
         # Get DEMUC list for role
         demuc_list = get_demuc_list_for_role(role)
@@ -88,20 +84,16 @@ class TopicClassifyAgent(Node):
         }
 
     def post(self, shared, prep_res, exec_res):
-        logger.info(f"🏷️ [TopicClassifyAgent] POST - Classification result: {exec_res}")
 
         # Update shared with classification results - WRITE ONLY
         shared["demuc"] = exec_res.get("demuc", "")
         shared["chu_de_con"] = exec_res.get("chu_de_con", "")  # Always empty now
         shared["classification_confidence"] = exec_res.get("confidence", "low")
 
-        logger.info(f"🏷️ [TopicClassifyAgent] POST - Updated: DEMUC='{shared['demuc']}'")
 
         # Check for API overload
         if exec_res.get("api_overload", False):
             return "fallback"
-
         # Classification complete - proceed to retrieval
-        logger.info("🏷️ [TopicClassifyAgent] POST - Classification complete, routing to retrieval")
         return "default"  # Go to next node (RetrieveFromKB)
 

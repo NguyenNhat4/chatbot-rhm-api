@@ -42,7 +42,7 @@ def retrieve_from_qdrant(
     demuc: Optional[str] = None,
     chu_de_con: Optional[str] = None,
     top_k: int = 20,
-    collection_name: str = "hybrid-search",
+    collection_name: str = "bnrhm",
     qdrant_url: str = "http://localhost:6333"
 ) -> List[Dict[str, Any]]:
     """
@@ -53,7 +53,7 @@ def retrieve_from_qdrant(
         - demuc (str, optional): Filter by DEMUC if provided
         - chu_de_con (str, optional): Filter by CHU_DE_CON if provided
         - top_k (int): Number of results to return (default: 20)
-        - collection_name (str): Qdrant collection name
+        - collection_name (str): Qdrant collection name (role-specific: bndtd, bsnt, bnrhm, bsrhm)
         - qdrant_url (str): Qdrant server URL
 
     Output:
@@ -166,7 +166,7 @@ def retrieve_from_qdrant(
 
 def get_full_qa_by_ids(
     ids: List[int],
-    collection_name: str = "hybrid-search",
+    collection_name: str = "bnrhm",
     qdrant_url: str = "http://localhost:6333"
 ) -> List[Dict[str, Any]]:
     """
@@ -174,7 +174,7 @@ def get_full_qa_by_ids(
 
     Input:
         - ids (List[int]): List of document IDs
-        - collection_name (str): Qdrant collection name
+        - collection_name (str): Qdrant collection name (default: bnrhm for patient_dental)
         - qdrant_url (str): Qdrant server URL
 
     Output:
