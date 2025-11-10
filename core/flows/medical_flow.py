@@ -27,7 +27,10 @@ def create_retrieve_flow(fallback_node):
     Returns:
         Flow: A flow that starts with topic_classify
     """
-    from nodes import    TopicClassifyAgent, RetrieveFromKB, FilterAgent
+    from ..nodes import   (
+        TopicClassifyAgent, RetrieveFromKB, FilterAgent
+    )
+    
     from pocketflow import Flow 
     logger.info("[retrieve_flow] Creating retrieval sub-flow")
 
@@ -54,9 +57,9 @@ def create_retrieve_flow(fallback_node):
 
 
 def create_med_agent_flow():
-    from nodes import (
-    IngestQuery, DecideToRetriveOrAnswer, RagAgent, ComposeAnswer,
-    FallbackNode,
+    from ..nodes import (
+        IngestQuery, DecideToRetriveOrAnswer, RagAgent, ComposeAnswer,
+        FallbackNode,
     )
     from pocketflow import Flow 
     logger.info("[Flow] Tạo medical agent flow với retrieve_flow sub-flow")

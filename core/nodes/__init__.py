@@ -12,6 +12,12 @@ from .DecideToRetriveOrAnswer import DecideToRetriveOrAnswer
 from .RetrieveFromKB import RetrieveFromKB
 from .ComposeAnswer import ComposeAnswer
 from .FallbackNode import FallbackNode
+from .FilterAgent import FilterAgent
+from .RagAgent import RagAgent
+from .QueryExpandAgent import QueryExpandAgent
+from .TopicClassifyAgent import TopicClassifyAgent 
+
+
 
 # Future / optional nodes:
 # from .GreetingResponse import GreetingResponse  # Uncomment when implemented
@@ -33,6 +39,10 @@ __all__ = [
     "RetrieveFromKB",
     "ComposeAnswer",
     "FallbackNode",
+    "FilterAgent",
+    "RagAgent",
+    "QueryExpandAgent",
+    "TopicClassifyAgent",
     # "GreetingResponse",  # add when implemented
     # OQA nodes
     # "OQAIngestDefaults",
