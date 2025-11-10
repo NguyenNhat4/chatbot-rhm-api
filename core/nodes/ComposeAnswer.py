@@ -74,7 +74,6 @@ class ComposeAnswer(Node):
         relevant_info_from_kb = format_kb_qa_list(retrieved, max_items=6)
 
         prompt = PROMPT_COMPOSE_ANSWER.format(
-            ai_role=persona['persona'],
             audience=persona['audience'],
             tone=persona['tone'],
             query=query,

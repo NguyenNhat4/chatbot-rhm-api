@@ -57,7 +57,7 @@ rag_questions:
 
 
 PROMPT_COMPOSE_ANSWER = """
-Bạn là {ai_role} cung cấp tri thức y khoa dựa trên cơ sở tri thức do bác sĩ biên soạn.
+Hay cung cấp tri thức y khoa dựa trên cơ sở tri thức do bác sĩ biên soạn.
 Input hiện tại của người dùng:
 {query}
 
@@ -65,7 +65,8 @@ Danh sách Q&A đã retrieve:
 {relevant_info_from_kb}
 
 NHIỆM VỤ
-1)   - Văn phong phù hợp cho {audience}, giọng {tone}.
+1) -   Không chào, đi thẳng vào câu trả lời
+  - Văn phong phù hợp cho {audience}, giọng {tone}.
    - Kết thúc bằng một dòng tóm lược bắt đầu bằng “👉 Tóm lại,”.
 2) `suggestion_questions` là các câu hỏi gợi hướng tiếp theo cho người dùng.
 
@@ -80,7 +81,7 @@ HỢP ĐỒNG ĐẦU RA (BẮT BUỘC)
 MẪU PHẢI THEO ĐÚNG (giữ nguyên cấu trúc và THỤT LỀ, chỉ thay nội dung <>):
 ```yaml
 explanation: |
-  < đưa ra câu trả lời trực tiếp của bạn dựa trên thông tin Q&A;  dùng **nhấn mạnh** cho các từ khoá quan trọng>
+  < câu trả lời của bạn dựa trên thông tin Q&A;  dùng **nhấn mạnh** cho các từ khoá quan trọng>
   👉 Tóm lại, <tóm lược ngắn gọn có thể dựa vào danh sách Q&A>
 suggestion_questions:
   - "Câu hỏi gợi ý 1"
