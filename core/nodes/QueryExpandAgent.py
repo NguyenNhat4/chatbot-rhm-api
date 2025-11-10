@@ -49,8 +49,6 @@ class QueryExpandAgent(Node):
         prompt = f"""
 Bạn là trợ lý y khoa chuyên mở rộng và làm rõ câu hỏi của người dùng.
 
-Ngữ cảnh hội thoại gần đây:
-{formatted_history}
 
 Câu hỏi hiện tại của người dùng: "{query}"
 Role của người dùng: {role}
