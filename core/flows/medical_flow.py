@@ -3,7 +3,7 @@ import logging
 # Configure logging for this module with Vietnam timezone
 from utils.timezone_utils import setup_vietnam_logging
 from config.logging_config import logging_config
-from pocketflow import Flow 
+
 if logging_config.USE_VIETNAM_TIMEZONE:
     logger = setup_vietnam_logging(__name__, 
                                  level=getattr(logging, logging_config.LOG_LEVEL.upper()),
@@ -27,8 +27,8 @@ def create_retrieve_flow(fallback_node):
     Returns:
         Flow: A flow that starts with topic_classify
     """
-    from core.nodes.medical_nodes import TopicClassifyAgent, RetrieveFromKB, FilterAgent
-
+    from nodes import    TopicClassifyAgent, RetrieveFromKB, FilterAgent
+    from pocketflow import Flow 
     logger.info("[retrieve_flow] Creating retrieval sub-flow")
 
     # Create retrieval pipeline nodes
@@ -54,15 +54,16 @@ def create_retrieve_flow(fallback_node):
 
 
 def create_med_agent_flow():
-    from core.nodes.medical_nodes import (
-    IngestQuery, MainDecisionAgent, RagAgent, ComposeAnswer,
+    from nodes import (
+    IngestQuery, DecideToRetriveOrAnswer, RagAgent, ComposeAnswer,
     FallbackNode,
     )
+    from pocketflow import Flow 
     logger.info("[Flow] Tạo medical agent flow với retrieve_flow sub-flow")
 
     # Create nodes
     ingest = IngestQuery()
-    main_decision = MainDecisionAgent()
+    main_decision = DecideToRetriveOrAnswer()
     fallback = FallbackNode()
 
     # Create retrieve_flow sub-flow (pass fallback node for error routing)
