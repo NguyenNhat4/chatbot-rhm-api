@@ -73,7 +73,7 @@ class TopicClassifyAgent(Node):
             return {"demuc": "", "chu_de_con": "", "confidence": "low", "api_overload": True}
 
         classified_demuc = demuc_result.get("demuc", "")
-        logger.info(f"🏷️ [TopicClassifyAgent] EXEC - Classification result: DEMUC='{classified_demuc}'")
+        logger.info(f'🏷️ [TopicClassifyAgent] EXEC - Classification result: DEMUC="{classified_demuc}", confidence="{demuc_result.get("confidence", "low")}", reason="{demuc_result.get("reason", "")}" ')
 
         # Return with DEMUC only (no CHU_DE_CON)
         return {

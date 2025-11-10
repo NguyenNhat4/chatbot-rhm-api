@@ -21,20 +21,11 @@ class DecideToRetriveOrAnswer(Node):
     """Main decision agent - ONLY decides between RAG agent or chitchat agent"""
 
     def prep(self, shared):
-        logger.info("[MainDecision] PREP - Đọc query để phân loại RAG vs chitchat")
+        logger.info("[MainDecision] PREP - Đọc query và formatted history để phân loại RAG vs chitchat")
         query = shared.get("query", "").strip()
         role = shared.get("role", "")
-        conversation_history = shared.get("conversation_history", [])
-        # Lấy 3 cặp gần nhất (6 tin)
-        history_lines = []
-        for msg in conversation_history[-6:]:
-            try:
-                who = msg.get("role")
-                content = msg.get("content", "")
-                history_lines.append(f"- {who}: {content}")
-            except Exception:
-                continue
-        formatted_history = "\n".join(history_lines)
+        formatted_history = shared.get("formatted_conversation_history", "")
+        logger.info(f"[MainDecision] PREP - Query: {query[:50]}..., Has history: {bool(formatted_history)}")
         return query, role, formatted_history
 
     def exec(self, inputs):
@@ -47,26 +38,41 @@ class DecideToRetriveOrAnswer(Node):
         query, role, formatted_history = inputs
         logger.info("[MainDecision] EXEC - Deciding and responding")
 
-        # Prompt: decide type AND generate response if direct_response
-        prompt = f"""Bạn là trợ lý y tế nha khoa và nội tiết. Phân tích câu hỏi và quyết định.
+        # Build conversation history context if available
+        history_context = ""
+        if formatted_history:
+            history_context = f"""
+Lịch sử hội thoại gần đây:
+{formatted_history}
 
-Câu hỏi: "{query}"
+"""
 
-Hành động:
-- direct_response: trao đổi xuồng sả.  
-- retrieve_kb: câu hỏi về y tế cần tra kiến thức y tế. 
+        # Prompt: decide type AND generate response/new_query
+        prompt = f"""Bạn là bot trợ lý y tế, chỉ trao đổi quanh chủ đề y tế.
 
+{history_context}
+user input: "{query}"
+
+Chọn 1 trong 2 Hành động:
+- direct_response: trao đổi xuồng sả, hỏi để biết người dùng cần hỗ trợ gì về y tế
+- retrieve_kb: tra kiến thức y tế bác sĩ chuẩn bị trước khi trả lời câu hỏi y tế
+Lưu ý:
+- Hãy dựa vào ngữ cảnh hội thoại để hiểu câu hỏi và quyết định phù hợp
 Trả về YAML:
+Nếu chọn direct_response:
 ```yaml
 type: direct_response
 explanation: "Câu trả lời của bạn ở đây"
+new_query: "<để trống nếu type là direct_response>"
 ```
 
-HOẶC nếu cần tra KB:
+Nếu chọn retrieve_kb (cần tra KB):
 ```yaml
 type: retrieve_kb
-explanation: ""
-```"""
+explanation: "<để trống nếu type là retrieve_kb >"
+new_query: "< user input mới dùng để tra tra kiến thức y tế nếu input hiện tại chưa rõ. >"
+```
+"""
 
         try:
             resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
@@ -74,28 +80,30 @@ explanation: ""
             result = parse_yaml_with_schema(
                 resp,
                 required_fields=["type"],
-                optional_fields=["explanation"],
-                field_types={"type": str, "explanation": str}
+                optional_fields=["explanation", "new_query"],
+                field_types={"type": str, "explanation": str, "new_query": str}
             )
 
             decision_type = result.get("type", "")
             explanation = result.get("explanation", "")
+            new_query = result.get("new_query", "")
 
-            logger.info(f"[MainDecision] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}")
+            logger.info(f"[MainDecision] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, New query: '{new_query[:50] if new_query else 'N/A'}...'")
 
-            return {"type": decision_type, "explanation": explanation}
+            return {"type": decision_type, "explanation": explanation, "new_query": new_query}
 
         except APIOverloadException as e:
             logger.warning(f"[MainDecision] EXEC - API overloaded, triggering fallback: {e}")
-            return {"type": "api_overload", "explanation": ""}
+            return {"type": "api_overload", "explanation": "", "new_query": ""}
         except Exception as e:
             logger.warning(f"[MainDecision] EXEC - LLM classification failed: {e}")
-            return {"type": "default", "explanation": ""}
+            return {"type": "default", "explanation": "", "new_query": ""}
 
     def post(self, shared, prep_res, exec_res):
         logger.info(f"[MainDecision] POST - Classification result: {exec_res}")
         input_type = exec_res.get("type", "")
         explanation = exec_res.get("explanation", "")
+        new_query = exec_res.get("new_query", "")
 
         # Save explanation to shared if direct_response
         if input_type == "direct_response" and explanation:
@@ -109,6 +117,15 @@ explanation: ""
             logger.info(f"[MainDecision] POST - Direct response saved to 'explain': {explanation[:80]}...")
             return "direct_response"
         elif input_type == "retrieve_kb":
+            # Update query if new_query is provided (context-aware query enhancement)
+            original_query = shared.get("query", "")
+            if new_query and new_query.strip():
+                shared["original_query"] = original_query
+                shared["query"] = new_query.strip()
+                logger.info(f"[MainDecision] POST - Query updated from '{original_query[:50]}...' to '{new_query[:50]}...'")
+            else:
+                logger.info(f"[MainDecision] POST - No query update, keeping original: '{original_query[:50]}...'")
+
             # Initialize retrieve attempts counter for RAG pipeline
             shared["retrieve_attempts"] = 0
             logger.info("[MainDecision] POST - Complex question, routing to retrieve_kb (attempts=0)")
