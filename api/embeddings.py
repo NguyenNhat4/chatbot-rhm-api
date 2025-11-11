@@ -8,6 +8,15 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from utils.timezone_utils import get_vietnam_time
+import os
+from qdrant_client import QdrantClient
+from utils.knowledge_base.loadvector_qdrant import (
+    EmbeddingModels,
+    load_all_collections,
+    COLLECTION_CONFIGS,
+    QDRANT_URL
+)
+
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -21,14 +30,14 @@ class CollectionLoadRequest(BaseModel):
     collections: Optional[List[str]] = Field(
         None,
         description="List of specific collections to load. If None, all collections will be loaded.",
-        example=["bndtd", "bsnt"]
+        example=["bndtd", "bsnt" ,]
     )
     recreate: bool = Field(
         False,
         description="Whether to recreate collections if they already exist"
     )
     qdrant_url: Optional[str] = Field(
-        None,
+       QDRANT_URL,
         description="Optional Qdrant server URL override"
     )
 
@@ -94,14 +103,7 @@ async def load_embeddings(
     The operation will skip collections that already have data unless recreate=true.
     """
     try:
-        import os
-        from qdrant_client import QdrantClient
-        from utils.knowledge_base.loadvector_qdrant import (
-            EmbeddingModels,
-            load_all_collections,
-            COLLECTION_CONFIGS,
-            QDRANT_URL
-        )
+       
 
         logger.info(f"📥 Loading embeddings request received")
         logger.info(f"   Collections: {request.collections or 'all'}")
@@ -119,9 +121,9 @@ async def load_embeddings(
                     detail=f"Invalid collection names: {invalid_collections}. "
                            f"Available collections: {list(COLLECTION_CONFIGS.keys())}"
                 )
-
+        
         # Determine Qdrant URL
-        qdrant_url = request.qdrant_url or QDRANT_URL
+        qdrant_url = request.qdrant_url if request.qdrant_url and request.qdrant_url != "string" else QDRANT_URL
         if not qdrant_url:
             raise HTTPException(
                 status_code=400,
