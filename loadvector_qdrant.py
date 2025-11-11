@@ -36,6 +36,33 @@ COLLECTION_CONFIGS = {
     "bsrhm": ("bsrhm.csv", ["DEMUC", "CHUDECON", "CAUHOI", "CAUTRALOI"]),  # No GIAITHICH
 }
 
+# Abbreviation expansion mapping
+ABBREVIATION_MAP = {
+    "ĐTĐ": "Đái Tháo Đường",
+    "DTĐ": "Đái Tháo Đường",
+    "tiểu đường": "Đái Tháo Đường",
+     "Tiểu đường": "Đái Tháo Đường"
+}
+
+
+def expand_abbreviations(text: str) -> str:
+    """
+    Expand common medical abbreviations in text.
+
+    Args:
+        text: Input text that may contain abbreviations
+
+    Returns:
+        Text with abbreviations expanded
+    """
+    if not text:
+        return text
+
+    expanded_text = text
+    for abbr, full_form in ABBREVIATION_MAP.items():
+        expanded_text = expanded_text.replace(abbr, full_form)
+    return expanded_text
+
 
 class EmbeddingModels:
     """Container for embedding models with lazy loading."""
@@ -243,11 +270,15 @@ def prepare_points(
     for idx, (dense_emb, sparse_emb, late_emb, doc) in enumerate(
         zip(dense_embeddings, sparse_embeddings, late_interaction_embeddings, docs)
     ):
+        # Expand abbreviations in CAUHOI field for better searchability
+        cauhoi = doc.get("CAUHOI", "")
+        cauhoi_expanded = expand_abbreviations(cauhoi)
+
         # Prepare payload with all available fields
         payload = {
             "DEMUC": doc.get("DEMUC", ""),
             "CHUDECON": doc.get("CHUDECON", ""),
-            "CAUHOI": doc.get("CAUHOI", ""),
+            "CAUHOI": cauhoi_expanded,
             "CAUTRALOI": doc.get("CAUTRALOI", ""),
             "GIAITHICH": doc.get("GIAITHICH", "")  # Will be empty string if not present
         }
