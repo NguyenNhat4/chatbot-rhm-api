@@ -9,13 +9,9 @@ Medical chatbot API with RAG (Retrieval Augmented Generation) using Qdrant vecto
 - Make (optional, for using Makefile commands)
 
 ## Quick Start
-### First step 
-```bash
-copy .env.docker .env
-```
 
-### Next: Build docker 
-#### Option 1: Run Locally
+
+### Option 1: Run Locally
 
 ```bash
 # Copy local environment config
@@ -32,9 +28,8 @@ docker run -d -p 6333:6333 -p 6334:6334 qdrant/qdrant
 python start_api.py
 ```
 
-API will be available at `http://localhost:8000`
 
-#### Option 2: Run with Docker 
+### Option 2: Run with Docker 
 
 ```bash
 # Copy docker environment config
@@ -46,7 +41,11 @@ docker-compose up --build -d
 # Check status
 docker-compose ps
 ```
-### Final step: Load data for retrieve after build docker 
+### Important – Final step: Load data into Qdrant after building Docker
+
+- API docs: `http://localhost:8000/api/docs`
+- Endpoint: `POST /api/embeddings/load`
+- Click execute , it will load all data by default.
 
 
 ## Environment Configuration
