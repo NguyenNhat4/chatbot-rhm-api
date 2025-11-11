@@ -9,10 +9,11 @@ import logging
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient, models
 from fastembed import TextEmbedding, LateInteractionTextEmbedding, SparseTextEmbedding
-
+import os 
+from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
-
+load_dotenv(override=False)
 # Global embedding models (lazy loaded)
 _dense_model = None
 _sparse_model = None
@@ -43,7 +44,7 @@ def retrieve_from_qdrant(
     chu_de_con: Optional[str] = None,
     top_k: int = 20,
     collection_name: str = "bnrhm",
-    qdrant_url: str = "http://localhost:6333"
+    qdrant_url: str = os.getenv("DATABASE_URL")
 ) -> List[Dict[str, Any]]:
     """
     Retrieve documents from Qdrant using hybrid search (dense + sparse + late interaction).
@@ -167,7 +168,7 @@ def retrieve_from_qdrant(
 def get_full_qa_by_ids(
     ids: List[int],
     collection_name: str = "bnrhm",
-    qdrant_url: str = "http://localhost:6333"
+    qdrant_url: str = os.getenv("DATABASE_URL")
 ) -> List[Dict[str, Any]]:
     """
     Get full QA pairs by document IDs from Qdrant.

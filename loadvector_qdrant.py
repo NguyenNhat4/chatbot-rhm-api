@@ -14,10 +14,14 @@ import pandas as pd
 from fastembed import TextEmbedding, LateInteractionTextEmbedding, SparseTextEmbedding
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, VectorParams, PointStruct
+import os 
+from dotenv import load_dotenv
+
+load_dotenv(override=False)
 
 
 # Constants
-QDRANT_URL = "http://localhost:6333"
+QDRANT_URL = os.getenv("QDRANT_URL")
 BATCH_SIZE = 64
 CSV_BASE_PATH = "medical_knowledge_base"
 DENSE_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
@@ -121,6 +125,35 @@ def generate_embeddings(
     print(f"  - Generated embeddings for {len(questions)} documents\n")
 
     return dense_embeddings, sparse_embeddings, late_interaction_embeddings
+
+
+def collection_has_data(client: QdrantClient, collection_name: str) -> Tuple[bool, int]:
+    """
+    Check if a collection exists and has data.
+
+    Args:
+        client: QdrantClient instance
+        collection_name: Name of the collection to check
+
+    Returns:
+        Tuple of (has_data: bool, points_count: int)
+    """
+    try:
+        # Check if collection exists
+        collections = client.get_collections().collections
+        exists = any(col.name == collection_name for col in collections)
+
+        if not exists:
+            return False, 0
+
+        # Check if collection has data
+        collection_info = client.get_collection(collection_name)
+        points_count = collection_info.points_count
+
+        return points_count > 0, points_count
+
+    except Exception:
+        return False, 0
 
 
 def create_collection(
@@ -294,6 +327,14 @@ def load_single_collection(
     print("=" * 70)
 
     try:
+        # Check if collection already has data
+        has_data, points_count = collection_has_data(client, collection_name)
+
+        if has_data and not recreate:
+            print(f"  - Collection '{collection_name}' already has {points_count} points")
+            print(f"  - Skipping load (use --recreate to force reload)\n")
+            return True
+
         # Build CSV path
         csv_path = Path(CSV_BASE_PATH) / csv_filename
 
@@ -383,16 +424,16 @@ def print_summary(results: Dict[str, bool]) -> None:
     failed = [name for name, success in results.items() if not success]
 
     print(f"Total collections processed: {len(results)}")
-    print(f"Successful: {len(successful)}")
+    print(f"Successful/Skipped: {len(successful)}")
     print(f"Failed: {len(failed)}")
 
     if successful:
-        print(f"Successfully loaded:")
+        print(f"\nSuccessfully loaded or skipped (already had data):")
         for name in successful:
             print(f"  - {name}")
 
     if failed:
-        print(f"Failed to load:")
+        print(f"\nFailed to load:")
         for name in failed:
             print(f"  - {name}")
 
