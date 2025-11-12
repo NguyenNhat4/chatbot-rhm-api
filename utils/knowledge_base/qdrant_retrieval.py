@@ -168,7 +168,7 @@ def retrieve_from_qdrant(
 def get_full_qa_by_ids(
     ids: List[int],
     collection_name: str = "bnrhm",
-    qdrant_url: str = os.getenv("DATABASE_URL")
+    qdrant_url: str = os.getenv("QDRANT_URL")
 ) -> List[Dict[str, Any]]:
     """
     Get full QA pairs by document IDs from Qdrant.

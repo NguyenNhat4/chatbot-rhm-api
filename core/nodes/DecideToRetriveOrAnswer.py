@@ -89,7 +89,7 @@ new_query: "<viết lại user input cho rõ ràng nếu chưa.>"
             explanation = result.get("explanation", "")
             new_query = result.get("new_query", "")
 
-            logger.info(f"[MainDecision] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, New query: '{new_query[:50] if new_query else 'N/A'}...'")
+            logger.info(f"[MainDecision] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, New query: '{new_query if new_query else 'N/A'}...'")
 
             return {"type": decision_type, "explanation": explanation, "new_query": new_query}
 
