@@ -18,7 +18,6 @@ else:
 
 
 class DecideToRetriveOrAnswer(Node):
-    """Main decision agent - ONLY decides between RAG agent or chitchat agent"""
 
     def prep(self, shared):
         logger.info("[DecideToRetriveOrAnswer] PREP - Đọc query và formatted history để phân loại RAG vs chitchat")
@@ -47,7 +46,7 @@ Lịch sử hội thoại gần đây:
 
 """
 
-        # Prompt: decide type AND generate response/new_query
+        # Prompt: decide type AND generate response
         prompt = f"""Bạn là bot trợ lý y tế, chỉ trao đổi quanh chủ đề y tế.
 
 {history_context}
@@ -58,21 +57,22 @@ Chọn 1 trong 2 Hành động:
 - retrieve_kb: tra cơ sở tri thức y tế bác sĩ chuẩn bị trước khi trả lời câu hỏi y tế
 Lưu ý:
 - Hãy dựa vào ngữ cảnh hội thoại để hiểu câu hỏi và quyết định phù hợp
-- trong cơ sở tri thức chỉ dùng một term chung là "Đái Tháo Đường". 
+- trong cơ sở tri thức chỉ dùng một term chung là "Đái Tháo Đường".
+
+
 Trả về YAML:
 Nếu chọn direct_response:
 ```yaml
 type: direct_response
+context_summary: "<để trống>"
 explanation: "Câu trả lời của bạn ở đây"
-new_query: "<phải để trống>"
 ```
 
-Nếu chọn retrieve_kb (thực hiện hybrid search trên user query và compose agent sẽ trả lời dựa trên user input và thông tin retrieve,
-agent này sẽ không thấy được lịch sử chat nên có thể update bằng viết lại new_query cho rõ ràng.):
+Nếu chọn retrieve_kb:
 ```yaml
 type: retrieve_kb
+context_summary: "<tóm tắt bối cảnh để agent khác hiểu tối đa 2 câu. >"
 explanation: "<phải để trống>"
-new_query: "< Viết lại user input cho rõ ràng, chỉ khi nó mơ hồ.>"
 ```
 """
         logger.info(f"[DecideToRetriveOrAnswer] prompt: {prompt}")
@@ -83,30 +83,30 @@ new_query: "< Viết lại user input cho rõ ràng, chỉ khi nó mơ hồ.>"
             result = parse_yaml_with_schema(
                 resp,
                 required_fields=["type"],
-                optional_fields=["explanation", "new_query"],
-                field_types={"type": str, "explanation": str, "new_query": str}
+                optional_fields=["explanation", "context_summary"],
+                field_types={"type": str, "explanation": str, "context_summary": str}
             )
 
             decision_type = result.get("type", "")
             explanation = result.get("explanation", "")
-            new_query = result.get("new_query", "")
+            context_summary = result.get("context_summary", "")
 
-            logger.info(f"[DecideToRetriveOrAnswer] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, New query: '{new_query if new_query else 'N/A'}...'")
+            logger.info(f"[DecideToRetriveOrAnswer] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, Context summary: '{context_summary[:50] if context_summary else 'N/A'}...'")
 
-            return {"type": decision_type, "explanation": explanation, "new_query": new_query}
+            return {"type": decision_type, "explanation": explanation, "context_summary": context_summary}
 
         except APIOverloadException as e:
             logger.warning(f"[DecideToRetriveOrAnswer] EXEC - API overloaded, triggering fallback: {e}")
-            return {"type": "api_overload", "explanation": "", "new_query": ""}
+            return {"type": "api_overload", "explanation": "", "context_summary": ""}
         except Exception as e:
             logger.warning(f"[DecideToRetriveOrAnswer] EXEC - LLM classification failed: {e}")
-            return {"type": "default", "explanation": "", "new_query": ""}
+            return {"type": "default", "explanation": "", "context_summary": ""}
 
     def post(self, shared, prep_res, exec_res):
         logger.info(f"[DecideToRetriveOrAnswer] POST - Classification result: {exec_res}")
         input_type = exec_res.get("type", "")
         explanation = exec_res.get("explanation", "")
-        new_query = exec_res.get("new_query", "")
+        context_summary = exec_res.get("context_summary", "")
 
         # Save explanation to shared if direct_response
         if input_type == "direct_response" and explanation:
@@ -120,14 +120,10 @@ new_query: "< Viết lại user input cho rõ ràng, chỉ khi nó mơ hồ.>"
             logger.info(f"[DecideToRetriveOrAnswer] POST - Direct response saved to 'explain': {explanation[:80]}...")
             return "direct_response"
         elif input_type == "retrieve_kb":
-            # Update query if new_query is provided (context-aware query enhancement)
-            original_query = shared.get("query", "")
-            if new_query and new_query.strip():
-                shared["original_query"] = original_query
-                shared["query"] = new_query.strip()
-                logger.info(f"[DecideToRetriveOrAnswer] POST - Query updated from '{original_query[:50]}...' to '{new_query[:50]}...'")
-            else:
-                logger.info(f"[DecideToRetriveOrAnswer] POST - No query update, keeping original: '{original_query[:50]}...'")
+            # Save context summary if provided
+            if context_summary and context_summary.strip():
+                shared["context_summary"] = context_summary.strip()
+                logger.info(f"[DecideToRetriveOrAnswer] POST - Context summary saved: '{context_summary[:50]}...'")
 
             # Initialize retrieve attempts counter for RAG pipeline
             shared["retrieve_attempts"] = 0
