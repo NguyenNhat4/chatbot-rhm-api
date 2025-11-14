@@ -68,7 +68,6 @@ class RetrieveFromKB(Node):
             top_k=20,
             collection_name=collection_name
         )
-        logger.info(f"📚 [RetrieveFromKB] retrieve results: {retrieved_results}")
 
         # Extract lightweight candidates: {id, CAUHOI}
         candidates = [
@@ -78,15 +77,6 @@ class RetrieveFromKB(Node):
             }
             for result in retrieved_results
         ]
-
-        # Log top results
-        if candidates:
-            lines = ["\n📚 [RetrieveFromKB] TOP CANDIDATES:"]
-            for i, candidate in enumerate(candidates[:5], 1):
-                lines.append(
-                    f"  {i}. id={candidate['id']} | Q: {candidate['CAUHOI']}..."
-                )
-            logger.info("\n".join(lines))
 
         return candidates
 
