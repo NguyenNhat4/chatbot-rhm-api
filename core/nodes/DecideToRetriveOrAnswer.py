@@ -71,7 +71,7 @@ Nếu chọn retrieve_kb (cần tra KB):
 ```yaml
 type: retrieve_kb
 explanation: "<phải để trống>"
-new_query: "< Từ ngữ cảnh hội thoại và input hiện tại, viết lại user input cho rõ ràng , mục đích để search cơ sở tri thức.>"
+new_query: "< Viết lại user input cho rõ ràng, chỉ khi nó mơ hồ .>"
 ```
 """
 
