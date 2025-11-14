@@ -67,11 +67,12 @@ explanation: "Câu trả lời của bạn ở đây"
 new_query: "<phải để trống>"
 ```
 
-Nếu chọn retrieve_kb (cần tra KB):
+Nếu chọn retrieve_kb (thực hiện hybrid search trên user query và compose agent sẽ trả lời dựa trên user input và thông tin retrieve,
+agent này sẽ không thấy được lịch sử chat nên có thể update bằng viết lại new_query cho rõ ràng.):
 ```yaml
 type: retrieve_kb
 explanation: "<phải để trống>"
-new_query: "< Viết lại user input cho rõ ràng, chỉ khi nó mơ hồ .>"
+new_query: "< Viết lại user input cho rõ ràng, chỉ khi nó mơ hồ.>"
 ```
 """
 
