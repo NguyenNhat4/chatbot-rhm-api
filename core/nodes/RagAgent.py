@@ -33,14 +33,12 @@ class RagAgent(Node):
 
     def prep(self, shared):
         logger.info("  [RagAgent] PREP - Analyzing current state and making decision")
-        query = shared.get("retrieval_query", "query")
-        demuc = shared.get("demuc", "")
-        chu_de_con = shared.get("chu_de_con", "")
-        rag_state = shared.get("rag_state", "init")
+        query = shared.get("retrieval_query") or shared.get("query")
+        rag_state = shared.get("rag_state", "init") 
         expansion_tried = shared.get("expansion_tried", False)
         QA_retrieve_candidates = shared.get("retrieved_candidates", "Chưa có  câu hỏi  nào được retrieve")
 
-        return query, demuc, chu_de_con, rag_state, expansion_tried,QA_retrieve_candidates
+        return query, rag_state, expansion_tried,QA_retrieve_candidates
 
     def exec(self, inputs):
         from utils.llm import call_llm
@@ -48,12 +46,7 @@ class RagAgent(Node):
         from utils.auth import APIOverloadException
         from config.timeout_config import timeout_config
         
-        query, demuc, chu_de_con, rag_state, retrieve_attempts,QA_retrieve_candidates = inputs
-        logger.info(f"  [RagAgent] EXEC - Current state: {rag_state}, {len()} questions, attempts: {retrieve_attempts}")
-
-        
-
-
+        query, rag_state, retrieve_attempts,QA_retrieve_candidates = inputs
         prompt = f"""Bạn là Orchestrator RAG Agent đưa ra quyết định dựa vào thông tin sau.
 User query: "{query}"
 Retrieve attempts: {retrieve_attempts}/{self.max_retries}
