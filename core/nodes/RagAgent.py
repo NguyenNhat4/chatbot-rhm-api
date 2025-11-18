@@ -35,10 +35,10 @@ class RagAgent(Node):
         logger.info("  [RagAgent] PREP - Analyzing current state and making decision")
         query = shared.get("retrieval_query") or shared.get("query")
         rag_state = shared.get("rag_state", "init") 
-        expansion_tried = shared.get("expansion_tried", False)
+        retrieve_attempts = shared.get("retrieve_attempts", 1)
         QA_retrieve_candidates = shared.get("retrieved_candidates", "Chưa có  câu hỏi  nào được retrieve")
 
-        return query, rag_state, expansion_tried,QA_retrieve_candidates
+        return query, rag_state, retrieve_attempts,QA_retrieve_candidates
 
     def exec(self, inputs):
         from utils.llm import call_llm
@@ -68,6 +68,8 @@ Trả về chính xác câu trúc yml trên:
 """
 
         try:
+            logger.info(f"  [RagAgent] EXEC - prompts :{prompt}")
+            
             resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
 
             result = parse_yaml_with_schema(
@@ -80,7 +82,6 @@ Trả về chính xác câu trúc yml trên:
             valid_actions = ["retrieve_kb", "compose_answer","create_retrieval_query"]
             if result["next_action"] not in valid_actions:
                 raise ValueError(f"Invalid action: {result['next_action']}")
-
             logger.info(f"  [RagAgent] Decision: {result['next_action']} - {result['reason']}")
             return result
 

@@ -137,7 +137,8 @@ chu_de_con_reason: <viết một lý do ngắn gọn tại sao bạn chọn ch�
 
         logger.info(f"[classify_chu_de_con_with_llm] Calling LLM to classify CHU_DE_CON for DEMUC='{demuc}'")
 
-        resp = call_llm(prompt, fast_mode=True, max_retry_time=1)
+        resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
+
         logger.info(f"[classify_chu_de_con_with_llm] LLM response received")
 
         result = parse_yaml_with_schema(

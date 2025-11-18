@@ -21,7 +21,7 @@ class DecideSummarizeConversationToRetriveOrDirectlyAnswer(Node):
 
     def prep(self, shared):
         logger.info("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] PREP - Đọc query và formatted history để phân loại RAG vs chitchat")
-        query = shared.get("retrieval_query") or shared.get("query")
+        query = shared.get("query")
 
         role = shared.get("role", "")
         formatted_history = shared.get("formatted_conversation_history", "")
@@ -99,7 +99,6 @@ Trả về YAML như mẫu :
             logger.warning(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] EXEC - LLM classification failed: {e}")
 
     def post(self, shared, prep_res, exec_res):
-        logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Classification result: {exec_res}")
         input_type = exec_res.get("type", "")
         explanation = exec_res.get("explanation", "")
         context_summary = exec_res.get("context_summary", "")
@@ -113,22 +112,16 @@ Trả về YAML như mẫu :
             }
             shared["explain"] = explanation
             shared["suggestion_questions"] = []
-            logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Direct response saved to 'explain': {explanation[:80]}...")
             return "direct_response"
         elif input_type == "retrieve_kb":
             # Save context summary if provided
             if context_summary and context_summary.strip():
                 shared["context_summary"] = context_summary.strip()
-                logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Context summary saved: '{context_summary[:50]}...'")
 
             # Initialize retrieve attempts counter for RAG pipeline
-            shared["retrieve_attempts"] = 0
-            logger.info("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Complex question, routing to retrieve_kb (attempts=0)")
             return "retrieve_kb"
         elif input_type == "api_overload" or input_type == "default":
-            logger.warning("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - API issue, routing to fallback")
             return "fallback"
         else:
             # Fallback: if unknown type or no explanation, route to fallback
-            logger.warning(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Unknown type '{input_type}', routing to fallback")
             return "fallback"
