@@ -98,7 +98,7 @@ Trả về chính xác câu trúc yml trên:
         next_action = exec_res["next_action"]
         reason = exec_res.get("reason", "")
         current_attempts = shared.get("retrieve_attempts", 0)
-
+        shared['create_retrieval_query_reason'] = ""
         logger.info(f"  [RagAgent] POST - Next action: '{next_action}' | Reason: {reason} | Current attempts: {current_attempts}")
 
         # Update state based on next action
@@ -113,6 +113,8 @@ Trả về chính xác câu trúc yml trên:
             logger.info("  [RagAgent] POST - Proceeding to compose answer")
             return "compose_answer"
         elif next_action == "create_retrieval_query":
+            shared['create_retrieval_query_reason'] = reason
+            
             return "create_retrieval_query"
         else:
             logger.warning(f"  [RagAgent] POST - Unknown action '{next_action}', defaulting to compose_answer")
