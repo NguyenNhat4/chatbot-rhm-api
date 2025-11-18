@@ -37,7 +37,8 @@ class RagAgent(Node):
         rag_state = shared.get("rag_state", "init") 
         retrieve_attempts = shared.get("retrieve_attempts", 1)
         selected_questions = shared.get("selected_questions", "Chưa có  câu hỏi  nào được retrieve")
-        return query, rag_state, retrieve_attempts,selected_questions
+        context_summary  = shared.get("context_summary",  "")
+        return query, rag_state, retrieve_attempts,selected_questions,context_summary
 
     def exec(self, inputs):
         from utils.llm import call_llm
@@ -45,8 +46,8 @@ class RagAgent(Node):
         from utils.auth import APIOverloadException
         from config.timeout_config import timeout_config
         
-        query, rag_state, retrieve_attempts,selected_questions= inputs
-        
+        query, rag_state, retrieve_attempts,selected_questions,context_summary= inputs
+        conversation_context = f"Ngữ cảnh hội thoại:{context_summary}" if  context_summary else ""
         
         
         prompt = f"""Bạn là Orchestrator RAG Agent đưa ra quyết định dựa vào thông tin sau.
@@ -54,7 +55,7 @@ User query: "{query}"
 Retrieve attempts: {retrieve_attempts}/{self.max_retries}
 Danh sách câu hỏi đã retrieve: 
 {selected_questions}
-
+{conversation_context}
 Chọn một trong các actions sau:
 - create_retrieval_query: Update lại user query nếu nó không đủ thông tin để retrieve.
 - retrieve_kb: truy xuất thông tin QA dùng user query ,nếu không có câu hỏi đã retrieve nào liên quan tới user query.
