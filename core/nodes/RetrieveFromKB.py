@@ -74,7 +74,7 @@ class RetrieveFromKB(Node):
             query=retrieve_query,
             demuc=demuc ,
             chu_de_con=chu_de_con,
-            top_k=5,
+            top_k=10,
             collection_name=collection_name
             )
           
