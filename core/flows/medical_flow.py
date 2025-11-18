@@ -28,16 +28,19 @@ def create_retrieve_flow(fallback_node):
         Flow: A flow that starts with topic_classify
     """
     from ..nodes import   (
-         RetrieveFromKB, FilterAgent
+         RetrieveFromKB, FilterAgent,TopicClassifyAgent
     )
     
     from pocketflow import Flow 
     logger.info("[retrieve_flow] Creating retrieval sub-flow")
 
     # Create retrieval pipeline nodes
+    topic_classify = TopicClassifyAgent(max_retries=3,wait=2)
     retrieve_kb = RetrieveFromKB()
     filter_agent = FilterAgent()
-
+    
+    
+    topic_classify >> retrieve_kb  
     # retrieve_kb → filter_agent
     retrieve_kb >> filter_agent
     retrieve_kb - "fallback" >> fallback_node
@@ -45,7 +48,7 @@ def create_retrieve_flow(fallback_node):
     # filter_agent → default (will return to parent flow)
     filter_agent - "fallback" >> fallback_node
 
-    retrieve_flow = Flow(start=retrieve_kb)
+    retrieve_flow = Flow(start=topic_classify)
     logger.info("[retrieve_flow] Retrieval sub-flow created: topic_classify → retrieve_kb → filter_agent")
     return retrieve_flow
 
@@ -53,7 +56,7 @@ def create_retrieve_flow(fallback_node):
 def create_med_agent_flow():
     from ..nodes import (
         IngestQuery, DecideSummarizeConversationToRetriveOrDirectlyAnswer, RagAgent, ComposeAnswer,
-        FallbackNode,TopicClassifyAgent,QueryCreatingForRetrievalAgent
+        FallbackNode,QueryCreatingForRetrievalAgent
     )
     from pocketflow import Flow 
     logger.info("[Flow] Tạo medical agent flow với retrieve_flow sub-flow")
@@ -62,8 +65,7 @@ def create_med_agent_flow():
     ingest = IngestQuery()
     main_decision = DecideSummarizeConversationToRetriveOrDirectlyAnswer()
     fallback = FallbackNode()
-    topic_classify = TopicClassifyAgent(max_retries=3,wait=2)
-    rag_agent = RagAgent()
+    rag_agent = RagAgent(max_retries=2)
     compose_answer = ComposeAnswer()
     better_retrieval_query = QueryCreatingForRetrievalAgent()
     # Create retrieve_flow sub-flow (pass fallback node for error routing)
