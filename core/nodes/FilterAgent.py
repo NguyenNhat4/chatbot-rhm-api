@@ -28,15 +28,14 @@ class FilterAgent(Node):
 
     def prep(self, shared):
         logger.info("🔍 [FilterAgent] PREP - Reading query and candidates")
-        query = shared.get("query", "")
+        query = shared.get("retrieval_query", "query")
         role =  shared.get("role","")  # patient_dental, patient_diabetes,vv
         display_user_role_name =  ""
         
         candidates = shared.get("retrieved_candidates", [])
-        context_summary = shared.get("context_summary","")
         
-        logger.info(f"🔍 [FilterAgent] PREP - Query: '{query[:50]}...', Candidates: {len(candidates)}")
-        return query, candidates,context_summary,role 
+        logger.info(f"🔍 [FilterAgent] PREP - Query: '{query}...', Candidates: {len(candidates)}")
+        return query, candidates,role 
 
     def exec(self, inputs):
         from utils.llm import call_llm
@@ -44,12 +43,10 @@ class FilterAgent(Node):
         from utils.auth import APIOverloadException
         from config.timeout_config import timeout_config
         from  utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME
-        query, candidates,context_summary,role = inputs
+        query, candidates,role = inputs
         logger.info(f"🔍 [FilterAgent] EXEC - Filtering {len(candidates)} candidates")
-        for enum_item in RoleEnum:
-            if enum_item.value == "doctor_endocrine":
-                vietnamese_user_role_enum= enum_item
-        vietnamese_user_role  = ROLE_DISPLAY_NAME[vietnamese_user_role_enum]   
+        
+        vietnamese_user_role  = ROLE_DISPLAY_NAME[RoleEnum(role)]   # Vd: vietnamese_user_role = Bệnh Nhân Nha Khoa , .. 
         # Handle empty candidates
         if not candidates:
             logger.warning("🔍 [FilterAgent] EXEC - No candidates to filter")
@@ -63,9 +60,8 @@ class FilterAgent(Node):
         # Format candidates for LLM
         candidate_list_str = self._format_candidates(candidates)
         
-        prompt = f"""Chọn tối đa 6 câu hỏi liên quan nhất để trả lời user.
-bối cảnh hội thoại: {context_summary}
-query hiện tại của user: {query}
+        prompt = f"""Chọn tối đa 5 câu hỏi liên quan nhất để trả lời user.
+Query hiện tại của user: {query}
 user role: {vietnamese_user_role}
 
 Candidates:
@@ -116,6 +112,7 @@ selected_ids: [...]
         shared["rag_state"] = "filtered"
 
         logger.info(f"🔍 [FilterAgent] POST - Saved {len(selected_ids)} IDs")
-
+        if  not selected_ids:
+            return "fallback"
         return "default"
 

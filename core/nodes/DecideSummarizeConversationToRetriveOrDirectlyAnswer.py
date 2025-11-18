@@ -17,14 +17,14 @@ else:
     logger.setLevel(getattr(logging, logging_config.LOG_LEVEL.upper()))
 
 
-class DecideToRetriveOrAnswer(Node):
+class DecideSummarizeConversationToRetriveOrDirectlyAnswer(Node):
 
     def prep(self, shared):
-        logger.info("[DecideToRetriveOrAnswer] PREP - Đọc query và formatted history để phân loại RAG vs chitchat")
+        logger.info("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] PREP - Đọc query và formatted history để phân loại RAG vs chitchat")
         query = shared.get("query", "").strip()
         role = shared.get("role", "")
         formatted_history = shared.get("formatted_conversation_history", "")
-        logger.info(f"[DecideToRetriveOrAnswer] PREP - Query: {query[:50]}..., Has history: {bool(formatted_history)}")
+        logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] PREP - Query: {query[:50]}..., Has history: {bool(formatted_history)}")
         return query, role, formatted_history
 
     def exec(self, inputs):
@@ -33,39 +33,32 @@ class DecideToRetriveOrAnswer(Node):
         from utils.parsing import parse_yaml_with_schema
         from utils.auth import APIOverloadException
         from config.timeout_config import timeout_config
-
+        from utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME
         query, role, formatted_history = inputs
-        logger.info("[DecideToRetriveOrAnswer] EXEC - Deciding and responding")
-
+        logger.info("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] EXEC - Deciding and responding")
+        user_role_name =  ROLE_DISPLAY_NAME.get(RoleEnum(role))
         # Build conversation history context if available
         history_context = ""
         if formatted_history:
             history_context = f"""
-Lịch sử hội thoại gần đây:
-{formatted_history}
+                        Lịch sử hội thoại gần đây:
+                        {formatted_history}
 
 """
-
-        # Prompt: decide type AND generate response
         prompt = f"""Bạn là bot trợ lý y tế, chỉ trao đổi quanh chủ đề y tế.
 {history_context}
 current user input: "{query}"
-
+user role: {user_role_name}
 Chọn 1 trong 2 Hành động:
-- direct_response: trao đổi xuồng sả, hỏi để biết người dùng cần hỗ trợ gì về y tế
-- retrieve_kb: tra cơ sở tri thức y tế bác sĩ chuẩn bị trước khi trả lời câu hỏi y tế
+- direct_response: chào, hỏi người dùng  để hiểu họ cần hỗ trợ gì về y tế.
+- retrieve_kb: chuyển tiếp cho rag agent tra kiến thức y tế chuẩn để trả lời.
 Lưu ý:
 - Hãy dựa vào ngữ cảnh hội thoại để hiểu câu hỏi và quyết định phù hợp
-- trong cơ sở tri thức chỉ dùng một term chung là "Đái Tháo Đường".
-- type , context_summary, explanation (str), hãy chắn chắn yaml indent đúng để load đúng.
-
 
 Nếu chọn direct_response:
 ```yaml
 type: direct_response
-context_summary: "<để trống>"
-explanation: "Câu trả lời của bạn 
-    gửi tới user ở đây"
+explanation: <Câu trả lời của bạn gửi tới user ở đây>
 ```
 
 Nếu chọn retrieve_kb:
@@ -73,12 +66,10 @@ Nếu chọn retrieve_kb:
 type: retrieve_kb
 context_summary: |
     <sẽ mô tả ngắn gọn lại ngữ cảnh hội thoại đang diễn ra  và input hiện tại của họ.>
-explanation: <phải để trống>
 ```
-
-Trả về YAML như yêu cầu:
+Trả về YAML như mẫu :
 """
-        logger.info(f"[DecideToRetriveOrAnswer] prompt: {prompt}")
+        logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] prompt: {prompt}")
 
         try:
             resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
@@ -93,20 +84,21 @@ Trả về YAML như yêu cầu:
             decision_type = result.get("type", "")
             explanation = result.get("explanation", "")
             context_summary = result.get("context_summary", "")
-
-            logger.info(f"[DecideToRetriveOrAnswer] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, Context summary: '{context_summary[:50] if context_summary else 'N/A'}...'")
+            if decision_type == "direct_response":
+                assert explanation != "" , "Câu trả lời không được rỗng"
+                
+            logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] EXEC - Type: {decision_type}, Explanation length: {len(explanation)}, Context summary: '{context_summary[:50] if context_summary else 'N/A'}...'")
 
             return {"type": decision_type, "explanation": explanation, "context_summary": context_summary}
 
         except APIOverloadException as e:
-            logger.warning(f"[DecideToRetriveOrAnswer] EXEC - API overloaded, triggering fallback: {e}")
+            logger.warning(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] EXEC - API overloaded, triggering fallback: {e}")
             return {"type": "api_overload", "explanation": "", "context_summary": ""}
         except Exception as e:
-            logger.warning(f"[DecideToRetriveOrAnswer] EXEC - LLM classification failed: {e}")
-            return {"type": "default", "explanation": "", "context_summary": ""}
+            logger.warning(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] EXEC - LLM classification failed: {e}")
 
     def post(self, shared, prep_res, exec_res):
-        logger.info(f"[DecideToRetriveOrAnswer] POST - Classification result: {exec_res}")
+        logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Classification result: {exec_res}")
         input_type = exec_res.get("type", "")
         explanation = exec_res.get("explanation", "")
         context_summary = exec_res.get("context_summary", "")
@@ -120,22 +112,22 @@ Trả về YAML như yêu cầu:
             }
             shared["explain"] = explanation
             shared["suggestion_questions"] = []
-            logger.info(f"[DecideToRetriveOrAnswer] POST - Direct response saved to 'explain': {explanation[:80]}...")
+            logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Direct response saved to 'explain': {explanation[:80]}...")
             return "direct_response"
         elif input_type == "retrieve_kb":
             # Save context summary if provided
             if context_summary and context_summary.strip():
                 shared["context_summary"] = context_summary.strip()
-                logger.info(f"[DecideToRetriveOrAnswer] POST - Context summary saved: '{context_summary[:50]}...'")
+                logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Context summary saved: '{context_summary[:50]}...'")
 
             # Initialize retrieve attempts counter for RAG pipeline
             shared["retrieve_attempts"] = 0
-            logger.info("[DecideToRetriveOrAnswer] POST - Complex question, routing to retrieve_kb (attempts=0)")
+            logger.info("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Complex question, routing to retrieve_kb (attempts=0)")
             return "retrieve_kb"
         elif input_type == "api_overload" or input_type == "default":
-            logger.warning("[DecideToRetriveOrAnswer] POST - API issue, routing to fallback")
+            logger.warning("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - API issue, routing to fallback")
             return "fallback"
         else:
             # Fallback: if unknown type or no explanation, route to fallback
-            logger.warning(f"[DecideToRetriveOrAnswer] POST - Unknown type '{input_type}', routing to fallback")
+            logger.warning(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - Unknown type '{input_type}', routing to fallback")
             return "fallback"

@@ -30,13 +30,11 @@ class ComposeAnswer(Node):
             RoleEnum.PATIENT_DENTAL.value: "bnrhm",
             RoleEnum.DOCTOR_DENTAL.value: "bsrhm",
         }
-
+        context_summary = shared.get("context_summary", "")
         role = shared.get("role", "")
-        query = shared.get("query", "")
-        selected_ids = shared.get("selected_ids", [])
-        score = shared.get("retrieval_score", 0.0)
-        formatted_history = shared.get("formatted_conversation_history", "")
+        query = shared.get("retrieval_query", "query").strip()
 
+        selected_ids = shared.get("selected_ids", [])
         # Map role to collection name
         collection_name = ROLE_TO_COLLECTION.get(role, "bnrhm")
 
@@ -50,19 +48,19 @@ class ComposeAnswer(Node):
             logger.warning("✍️ [ComposeAnswer] PREP - No selected IDs, using empty list")
             retrieved_qa = []
 
-        return (role, query, retrieved_qa, score, formatted_history)
+        return role, query, retrieved_qa,context_summary
 
     def exec(self, inputs):
         # Import dependencies only when needed
         import time
         from utils.role_enum import PERSONA_BY_ROLE
         from utils.helpers import format_kb_qa_list
-        from utils.llm import call_llm, PROMPT_COMPOSE_ANSWER
+        from utils.llm import call_llm
         from utils.parsing import parse_yaml_with_schema
         from utils.auth import APIOverloadException
         from config.timeout_config import timeout_config
 
-        role, query, retrieved, score, formatted_history = inputs
+        role, query, retrieved, context_summary = inputs
 
         # Handle missing or invalid role with fallback
         if role not in PERSONA_BY_ROLE:
@@ -73,22 +71,38 @@ class ComposeAnswer(Node):
         # Compact KB context
         relevant_info_from_kb = format_kb_qa_list(retrieved, max_items=6)
 
-        prompt = PROMPT_COMPOSE_ANSWER.format(
-            audience=persona['audience'],
-            tone=persona['tone'],
-            query=query,
-            relevant_info_from_kb=relevant_info_from_kb if relevant_info_from_kb else "Không có thông tin từ cơ sở tri thức",
-            conversation_history=formatted_history if formatted_history else "Không có lịch sử hội thoại"
-        )
+        prompt = f"""
+Hay cung cấp tri thức y khoa dựa trên cơ sở tri thức do bác sĩ biên soạn.
+Bối cảnh hội thoại : {context_summary}
+User là :{ persona["audience"] }
+Câu hỏi cần trả lời: {query}
+
+Danh sách Q&A đã retrieve:
+{relevant_info_from_kb}
+
+Lưu ý:
+1) -   Không chào, đi thẳng vào câu trả lời,không tự trả lời nếu Q&A rỗng hoặc không đủ thông tin.
+  - { persona["tone"]}.
+   - Kết thúc bằng một dòng tóm lược bắt đầu bằng “👉 Tóm lại,”.
+2) `suggestion_questions` là danh sách các câu hỏi gợi hướng tiếp theo cho người dùng.
+
+```yaml
+explanation: |
+  <câu trả lời của bạn dựa trên thông tin Q&A;  dùng **nhấn mạnh** cho các từ khoá quan trọng>
+  👉 Tóm lại, <tóm lược ngắn gọn có thể dựa vào danh sách Q&A>
+suggestion_questions: |
+  - "Câu hỏi gợi ý 1"
+  - "Câu hỏi gợi ý 2"
+  - "Câu hỏi gợi ý 3"
+```
+
+Trả về chính xác cấu trúc yaml như ở trên trên:
+"""
         logger.info(f"✍️ [ComposeAnswer] EXEC - prompt: {prompt}")
 
         try:
-            start_time = time.time()
-            result = call_llm(prompt, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
-            end_time = time.time()
-
+            result = call_llm(prompt, max_retry_time=1)
             # Log LLM timing
-
             logger.info(f"✍️ [ComposeAnswer] EXEC - LLM response received")
             result = parse_yaml_with_schema(result, required_fields=["explanation", "suggestion_questions"], field_types={"explanation": str, "suggestion_questions": list})
             logger.info(f"✍️ [ComposeAnswer] EXEC - result: {result}")
