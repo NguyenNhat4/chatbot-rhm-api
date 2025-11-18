@@ -48,8 +48,7 @@ class QueryCreatingForRetrievalAgent(Node):
         
         
         # Build topic context if available
-        if demuc:
-            topic_context = f"\nChủ đề đã xác định: DEMUC='{demuc}'"
+        topic_context = f"\nChủ đề đã xác định: DEMUC='{demuc}'" if demuc else ""
             
         reason_final = f"\n- Lý do cần tạo là: {reason}" if reason else ""
     
