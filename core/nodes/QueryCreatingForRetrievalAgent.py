@@ -25,7 +25,8 @@ class QueryCreatingForRetrievalAgent(Node):
 
     def prep(self, shared):
         logger.info("🔍 [QueryCreatingForRetrievalAgent] PREP - Đọc query và context")
-        query = shared.get("query", "").strip()
+        query = shared.get("retrieval_query") or shared.get("query")
+
         role = shared.get("role", "")
         demuc = shared.get("demuc", "")
         chu_de_con = shared.get("chu_de_con", "")

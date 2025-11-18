@@ -22,7 +22,8 @@ class QueryExpandAgent(Node):
 
     def prep(self, shared):
         logger.info("🔍 [QueryExpandAgent] PREP - Đọc query và context")
-        query = shared.get("query", "").strip()
+        query = shared.get("retrieval_query") or shared.get("query")
+
         role = shared.get("role", "")
         formatted_history = shared.get("formatted_conversation_history", "")
         demuc = shared.get("demuc", "")

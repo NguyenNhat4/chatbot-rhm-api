@@ -21,7 +21,8 @@ class DecideSummarizeConversationToRetriveOrDirectlyAnswer(Node):
 
     def prep(self, shared):
         logger.info("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] PREP - Đọc query và formatted history để phân loại RAG vs chitchat")
-        query = shared.get("query", "").strip()
+        query = shared.get("retrieval_query") or shared.get("query")
+
         role = shared.get("role", "")
         formatted_history = shared.get("formatted_conversation_history", "")
         logger.info(f"[DecideSummarizeConversationToRetriveOrDirectlyAnswer] PREP - Query: {query[:50]}..., Has history: {bool(formatted_history)}")
@@ -41,8 +42,8 @@ class DecideSummarizeConversationToRetriveOrDirectlyAnswer(Node):
         history_context = ""
         if formatted_history:
             history_context = f"""
-                        Lịch sử hội thoại gần đây:
-                        {formatted_history}
+Lịch sử hội thoại gần đây:
+{formatted_history}
 
 """
         prompt = f"""Bạn là bot trợ lý y tế, chỉ trao đổi quanh chủ đề y tế.
@@ -65,7 +66,7 @@ Nếu chọn retrieve_kb:
 ```yaml
 type: retrieve_kb
 context_summary: |
-    <sẽ mô tả ngắn gọn lại ngữ cảnh hội thoại đang diễn ra  và input hiện tại của họ.>
+    <sẽ mô tả ngắn gọn lại ngữ cảnh hội thoại để agent khác hiểu>
 ```
 Trả về YAML như mẫu :
 """

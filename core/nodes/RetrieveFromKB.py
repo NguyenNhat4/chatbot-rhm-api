@@ -44,7 +44,7 @@ class RetrieveFromKB(Node):
 
     def prep(self, shared):
         # Read from shared store ONLY
-        query = shared.get("retrieve_query", "query")
+        query = shared.get("retrieval_query") or shared.get("query")
         demuc = shared.get("demuc", "")
         chu_de_con = shared.get("chu_de_con", "")
         role = shared.get("role", RoleEnum.PATIENT_DENTAL.value)

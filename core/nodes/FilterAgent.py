@@ -28,7 +28,8 @@ class FilterAgent(Node):
 
     def prep(self, shared):
         logger.info("🔍 [FilterAgent] PREP - Reading query and candidates")
-        query = shared.get("retrieval_query", "query")
+        query = shared.get("retrieval_query") or shared.get("query")
+
         role =  shared.get("role","")  # patient_dental, patient_diabetes,vv
         display_user_role_name =  ""
         

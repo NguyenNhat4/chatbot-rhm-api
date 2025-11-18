@@ -43,7 +43,8 @@ class TopicClassifyAgent(Node):
     def prep(self, shared):
 
         # Read ALL data from shared store - no external calls
-        query = shared.get("retrieval_query", "query").strip()
+        query = shared.get("retrieval_query") or shared.get("query")
+
         role = shared.get("role", "")
         current_demuc = shared.get("demuc", "")
         current_chu_de_con = shared.get("chu_de_con", "")
