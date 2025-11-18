@@ -51,7 +51,7 @@ Lịch sử hội thoại gần đây:
 current user input: "{query}"
 user role: {user_role_name}
 Chọn 1 trong 2 Hành động:
-- direct_response: chào, hỏi người dùng  để hiểu họ cần hỗ trợ gì về y tế.
+- direct_response: chào, hỏi người dùng  để hiểu họ cần hỗ trợ gì về y tế, trả lời trực tiếp hội thoại đủ thông tin, hoặc bị lặp lại.
 - retrieve_kb: chuyển tiếp cho rag agent tra kiến thức y tế chuẩn để trả lời.
 Lưu ý:
 - Hãy dựa vào ngữ cảnh hội thoại để hiểu câu hỏi và quyết định phù hợp
