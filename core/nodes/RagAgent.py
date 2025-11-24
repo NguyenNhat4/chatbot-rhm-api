@@ -35,7 +35,6 @@ class RagAgent(Node):
     """
 
     def prep(self, shared):
-        logger.info("  [RagAgent] PREP - Analyzing current state and making decision")
         query = shared.get("retrieval_query") or shared.get("query")
         rag_state = shared.get("rag_state", "init") 
         attempts = shared.get("attempts", 1)
@@ -45,7 +44,6 @@ class RagAgent(Node):
 
         # Hard check: Force compose_answer if max attempts reached to prevent infinite loops
         if attempts > MAX_RETRIEVAL_LOOPS:
-            logger.warning(f"  [RagAgent] Max retrieval attempts ({MAX_RETRIEVAL_LOOPS}) reached. Forcing compose_answer.")
             return None  # Signal to exec to skip LLM call and return compose_answer
         
         return query, rag_state, attempts, selected_questions, context_summary,action_history
@@ -102,10 +100,8 @@ Trả về chính xác cấu trúc yml trên:
                 
             valid_actions = ["retrieve_kb", "compose_answer", "create_retrieval_query"]
             if result["next_action"] not in valid_actions:
-                logger.warning(f"  [RagAgent] Invalid action '{result['next_action']}', falling back to compose_answer")
                 return {"next_action": "compose_answer", "reason": "Invalid LLM action","attempts": attempts}
             assert result["next_action"] in valid_actions , f"Next action must be in valid actions: {valid_actions}"
-            logger.info(f"  [RagAgent] Decision: {result['next_action']} - {result['reason']}")
             result["attempts"] = attempts
             result["action_history"] = action_history
             return result 
@@ -123,26 +119,21 @@ Trả về chính xác cấu trúc yml trên:
         action_history = exec_res.get("action_history", [])
         current_attempts = exec_res.get("attempts", 0)
         shared['create_retrieval_query_reason'] = ""
-        logger.info(f"  [RagAgent] POST - Next action: '{next_action}' | Reason: {reason} | Current attempts: {current_attempts}")
-        logger.info(f"  [RagAgent] POST - Retrying retrieval pipeline (attempt {current_attempts }/{MAX_RETRIEVAL_LOOPS})")
         
         # Update state based on next action
         if next_action == "retrieve_kb":
             # Safety check: prevent infinite loops even if LLM decides to retrieve again
             if current_attempts >= MAX_RETRIEVAL_LOOPS:
-                logger.warning(f"  [RagAgent] POST - Blocking retrieve_kb (attempts {current_attempts} >= {MAX_RETRIEVAL_LOOPS}), forcing compose_answer")
                 shared["rag_state"] = "composing"
                 return "compose_answer"
             
             return "retrieve_kb"
         elif next_action == "compose_answer":
             shared["rag_state"] = "composing"
-            logger.info("  [RagAgent] POST - Proceeding to compose answer")
             return "compose_answer"
         elif next_action == "create_retrieval_query":
             shared['create_retrieval_query_reason'] = reason
             shared["rag_state"] = "create_retrieval_query_reason"
             return "create_retrieval_query"
         else:
-            logger.warning(f"  [RagAgent] POST - Unknown action '{next_action}', defaulting to compose_answer")
             return "compose_answer"
