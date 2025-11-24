@@ -60,7 +60,7 @@ class RagAgent(Node):
         if inputs is None:
             return {"next_action": "compose_answer", "reason": "Max retrieval attempts reached"}
         
-        query, rag_state, attempts, selected_questions, context_summary = inputs
+        query, rag_state, attempts, selected_questions, context_summary,action_history = inputs
         conversation_context = f"Hội thoại tóm tắt (Context): {context_summary}" if context_summary else "Hội thoại vừa bắt đầu."
         current_knowledge = selected_questions if selected_questions else "Chưa có thông tin (Empty)"
         prompt = f"""Bạn là Orchestrator RAG Agent đưa ra quyết định dựa vào thông tin sau.
@@ -95,8 +95,11 @@ Trả về chính xác cấu trúc yml trên:
                 required_fields=["next_action", "reason"],
                 field_types={"next_action": str, "reason": str}
             )
-
-            # Validate action
+            action_history.append(result["next_action"])
+            if action_history[-1] == "create_retrieval_query":
+                action_history.append("retrieve_kb")
+                
+                
             valid_actions = ["retrieve_kb", "compose_answer", "create_retrieval_query"]
             if result["next_action"] not in valid_actions:
                 logger.warning(f"  [RagAgent] Invalid action '{result['next_action']}', falling back to compose_answer")
@@ -104,6 +107,7 @@ Trả về chính xác cấu trúc yml trên:
             assert result["next_action"] in valid_actions , f"Next action must be in valid actions: {valid_actions}"
             logger.info(f"  [RagAgent] Decision: {result['next_action']} - {result['reason']}")
             result["attempts"] = attempts
+            result["action_history"] = action_history
             return result 
 
         except APIOverloadException:
@@ -116,6 +120,7 @@ Trả về chính xác cấu trúc yml trên:
     def post(self, shared, prep_res, exec_res):
         next_action = exec_res["next_action"]
         reason = exec_res.get("reason", "")
+        action_history = exec_res.get("action_history", [])
         current_attempts = exec_res.get("attempts", 0)
         shared['create_retrieval_query_reason'] = ""
         logger.info(f"  [RagAgent] POST - Next action: '{next_action}' | Reason: {reason} | Current attempts: {current_attempts}")
