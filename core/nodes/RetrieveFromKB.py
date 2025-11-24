@@ -47,18 +47,17 @@ class RetrieveFromKB(Node):
         query = shared.get("retrieval_query") or shared.get("query")
         demuc = shared.get("demuc", "")
         # chu_de_con = shared.get("chu_de_con", "") # Not used anymore
+        top_k = shared.get("top_k", 20)
         role = shared.get("role", RoleEnum.PATIENT_DENTAL.value)
-        return query, demuc, role
+        return query, demuc, role, top_k
 
     def exec(self, inputs):
-        retrieve_query, demuc, role = inputs
+        retrieve_query, demuc, role, top_k = inputs
         # Call Qdrant retrieval utility function
         from utils.knowledge_base.qdrant_retrieval import retrieve_from_qdrant
 
         # Map role to collection name
         collection_name = ROLE_TO_COLLECTION.get(role, "bnrhm")
-
-        logger.info(f"📚 [RetrieveFromKB] Role: {role} -> Collection: {collection_name}")
 
         # Strategy:
         # 1. Search WITHOUT filters (global context)
@@ -70,7 +69,7 @@ class RetrieveFromKB(Node):
             query=retrieve_query,
             demuc=None,
             chu_de_con=None,
-            top_k=20,
+            top_k=top_k,
             collection_name=collection_name
         )
         
@@ -81,7 +80,7 @@ class RetrieveFromKB(Node):
                 query=retrieve_query,
                 demuc=demuc,
                 chu_de_con=None, # Ignore sub-topic
-                top_k=20, # Slightly less than global
+                top_k=top_k, # Slightly less than global
                 collection_name=collection_name
             )
           
@@ -99,8 +98,8 @@ class RetrieveFromKB(Node):
         # Sort by score descending
         unique_results.sort(key=lambda x: x.get("score", 0), reverse=True)
         
-        # Take top 10 highest score
-        top_results = unique_results[:10]
+        # Take top k highest score
+        top_results = unique_results
 
         # Extract lightweight candidates: {id, CAUHOI}
         candidates = [
@@ -132,5 +131,4 @@ class RetrieveFromKB(Node):
         
         # Update RAG state
         shared["rag_state"] = "retrieved"
-        logger.info(f"📚 [RetrieveFromKB] POST - Saved {len(candidates)} candidates directly as selected")
         return "default" 
