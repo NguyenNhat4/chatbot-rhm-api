@@ -31,9 +31,9 @@ class QueryCreatingForRetrievalAgent(Node):
         demuc = shared.get("demuc", "")
         chu_de_con = shared.get("chu_de_con", "")
         context_summary = shared.get("context_summary", "")
-        
+        reason = shared.get('create_retrieval_query_reason' , "")
         logger.info(f"🔍 [QueryCreatingForRetrievalAgent] PREP - Query: {query[:50]}..., Role: {role}, DEMUC: {demuc}, CHU_DE_CON: {chu_de_con}")
-        return query, role, demuc, chu_de_con, context_summary
+        return query, role, demuc, chu_de_con, context_summary,reason
 
     def exec(self, inputs):
         # Import dependencies only when needed
@@ -43,25 +43,22 @@ class QueryCreatingForRetrievalAgent(Node):
         from config.timeout_config import timeout_config
         from utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME
         
-        current_user_input, role, demuc, chu_de_con, context_summary = inputs
+        current_user_input, role, demuc, chu_de_con, context_summary,reason = inputs
         vietnameseRole = ROLE_DISPLAY_NAME.get(RoleEnum(role), "Người dùng") # VD role = 'patient_dental' -> vietnameseRole='Bệnh nhân nha khoa'
         
-        logger.info(f"🔍 [QueryCreatingForRetrievalAgent] EXEC - Creating retrieval query for: '{current_user_input[:50]}...'")
         
         # Build topic context if available
-        topic_context = ""
-        if demuc and chu_de_con:
-            topic_context = f"\nChủ đề đã xác định: DEMUC='{demuc}', CHU_DE_CON='{chu_de_con}'"
-        elif demuc:
-            topic_context = f"\nChủ đề đã xác định: DEMUC='{demuc}'"
-        
+        topic_context = f"\nChủ đề đã xác định: DEMUC='{demuc}'" if demuc else ""
+            
+        reason_final = f"- Lý do cần tạo là: {reason}" if reason else ""
     
         
-        prompt = f"""Bạn là hệ thống tạo câu hỏi để truy vấn  mục tiêu là  lọc ra các câu hỏi liên quan nhất từ bộ câu hỏi QA y khoa,
+        prompt = f"""Bạn là hệ thống tạo câu hỏi để truy vấn  mục tiêu là  lọc ra các câu hỏi liên quan nhất từ bộ câu hỏi QA y khoa.
 
 BỐI CẢNH:
 -Tóm tắt hội thoại trước đó: {context_summary}
 - Câu hỏi hiện tại của người dùng: "{current_user_input}"
+{reason_final}
 - Người dùng là {vietnameseRole} 
         {topic_context}
 
@@ -78,6 +75,8 @@ confidence: "high"  # hoặc medium, low
 ```"""
 
         try:
+            logger.info(f"🔍 [QueryCreatingForRetrievalAgent] EXEC - prompts: '{prompt}")
+            
             resp = call_llm(prompt, fast_mode=True, max_retry_time=timeout_config.LLM_RETRY_TIMEOUT)
             logger.info(f"🔍 [QueryCreatingForRetrievalAgent] EXEC - LLM response: {resp[:200]}...")
 
