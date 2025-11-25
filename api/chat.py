@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from datetime import datetime
 import threading
 
-from core.flows import create_med_agent_flow
+from core.flows import MedFlow
 
 # Configure logger
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def get_med_flow():
     global _med_flow
     if _med_flow is None:
         try:
-            _med_flow = create_med_agent_flow()
+            _med_flow = MedFlow()
             logger.info("✅ Medical flow created successfully")
         except Exception as e:
             logger.error(f"❌ Failed to create medical flow: {str(e)}")
