@@ -102,7 +102,8 @@ def _trace_flow_class(flow_class, config, flow_name, session_id, user_id):
         if not hasattr(self, '_tracer'):
             # Fallback if not properly initialized
             return original_run(self, shared) if original_run else None
-            
+        self._tracer.config.user_id = shared.get("user_id","default_user_id")
+        self._tracer.config.session_id = shared.get("session_id","default_session_id")
         # Start trace
         self._trace_id = self._tracer.start_trace(self._flow_name, shared)
         
@@ -128,7 +129,8 @@ def _trace_flow_class(flow_class, config, flow_name, session_id, user_id):
         if not hasattr(self, '_tracer'):
             # Fallback if not properly initialized
             return await original_run_async(self, shared) if original_run_async else None
-            
+        self._tracer.config.user_id = shared.get("user_id","default_user_id")
+        self._tracer.config.session_id = shared.get("session_id","default_session_id")
         # Start trace
         self._trace_id = self._tracer.start_trace(self._flow_name, shared)
         
