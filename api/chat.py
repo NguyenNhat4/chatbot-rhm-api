@@ -38,9 +38,9 @@ def get_med_flow():
     if _med_flow is None:
         try:
             _med_flow = MedFlow()
-            logger.info("✅ Medical flow created successfully")
+            logger.info(" Medical flow created successfully")
         except Exception as e:
-            logger.error(f"❌ Failed to create medical flow: {str(e)}")
+            logger.error(f" Failed to create medical flow: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Failed to initialize medical flow: {str(e)}")
     return _med_flow
 
@@ -196,6 +196,7 @@ async def chat(
             "query": "",
             "explain": "",
             "conversation_history": conversation_history,
+            "user_id": user_id,
             "session_id": request.session_id,
         }
 
@@ -210,7 +211,7 @@ async def chat(
                         flow = get_oqa_flow()
                         flow.run(shared)
                     except Exception as e:
-                        logger.error(f"❌ OQA flow execution failed: {str(e)}")
+                        logger.error(f" OQA flow execution failed: {str(e)}")
                         # Provide fallback response
                         shared["explain"] = "Xin lỗi, có lỗi xảy ra khi xử lý câu hỏi chỉnh nha. Vui lòng thử lại sau."
                         shared["suggestion_questions"] = []
@@ -218,13 +219,13 @@ async def chat(
                         shared["need_clarify"] = False
                 else:
                     logger.info(
-                        f"🔥 Running medical flow (timeout: {timeout_config.FLOW_EXECUTION_TIMEOUT}s)"
+                        f" Running medical flow (timeout: {timeout_config.FLOW_EXECUTION_TIMEOUT}s)"
                     )
                     try:
                         flow = get_med_flow()
                         flow.run(shared)
                     except Exception as e:
-                        logger.error(f"❌ Medical flow execution failed: {str(e)}")
+                        logger.error(f" Medical flow execution failed: {str(e)}")
                         # Provide fallback response
                         shared["explain"] = "Xin lỗi, có lỗi xảy ra khi xử lý câu hỏi y khoa. Vui lòng thử lại sau."
                         shared["suggestion_questions"] = []
