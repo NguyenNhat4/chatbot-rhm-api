@@ -33,7 +33,14 @@ class QueryCreatingForRetrievalAgent(Node):
         context_summary = shared.get("context_summary", "")
         reason = shared.get('create_retrieval_query_reason' , "")
         logger.info(f"🔍 [QueryCreatingForRetrievalAgent] PREP - Query: {query[:50]}..., Role: {role}, DEMUC: {demuc}, CHU_DE_CON: {chu_de_con}")
-        return query, role, demuc, chu_de_con, context_summary,reason
+        return {
+            "query": query,
+            "role": role,
+            "demuc": demuc,
+            "chu_de_con": chu_de_con,
+            "context_summary": context_summary,
+            "reason": reason
+        }
 
     def exec(self, inputs):
         # Import dependencies only when needed
@@ -43,7 +50,12 @@ class QueryCreatingForRetrievalAgent(Node):
         from config.timeout_config import timeout_config
         from utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME
         
-        current_user_input, role, demuc, chu_de_con, context_summary,reason = inputs
+        current_user_input = inputs["query"]
+        role = inputs["role"]
+        demuc = inputs["demuc"]
+        chu_de_con = inputs["chu_de_con"]
+        context_summary = inputs["context_summary"]
+        reason = inputs["reason"]
         vietnameseRole = ROLE_DISPLAY_NAME.get(RoleEnum(role), "Người dùng") # VD role = 'patient_dental' -> vietnameseRole='Bệnh nhân nha khoa'
         
         

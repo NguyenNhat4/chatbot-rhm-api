@@ -46,7 +46,14 @@ class RagAgent(Node):
         if attempts > MAX_RETRIEVAL_LOOPS:
             return None  # Signal to exec to skip LLM call and return compose_answer
         
-        return query, rag_state, attempts, selected_questions, context_summary,action_history
+        return {
+            "query": query,
+            "rag_state": rag_state,
+            "attempts": attempts,
+            "selected_questions": selected_questions,
+            "context_summary": context_summary,
+            "action_history": action_history
+        }
 
     def exec(self, inputs):
         from utils.llm import call_llm
@@ -58,7 +65,12 @@ class RagAgent(Node):
         if inputs is None:
             return {"next_action": "compose_answer", "reason": "Max retrieval attempts reached"}
         
-        query, rag_state, attempts, selected_questions, context_summary,action_history = inputs
+        query = inputs["query"]
+        rag_state = inputs["rag_state"]
+        attempts = inputs["attempts"]
+        selected_questions = inputs["selected_questions"]
+        context_summary = inputs["context_summary"]
+        action_history = inputs["action_history"]
         conversation_context = f"Hội thoại tóm tắt (Context): {context_summary}" if context_summary else "Hội thoại vừa bắt đầu."
         current_knowledge = selected_questions if selected_questions else "Chưa có thông tin (Empty)"
         prompt = f"""Bạn là Orchestrator RAG Agent đưa ra quyết định dựa vào thông tin sau.

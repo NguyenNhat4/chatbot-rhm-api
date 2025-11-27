@@ -48,10 +48,18 @@ class RetrieveFromKBWithDemuc(Node):
         demuc = shared.get("demuc", "")
         top_k = shared.get("top_k", 20)
         role = shared.get("role", RoleEnum.PATIENT_DENTAL.value)
-        return query, demuc, role, top_k
+        return {
+            "query": query,
+            "demuc": demuc,
+            "role": role,
+            "top_k": top_k
+        }
 
     def exec(self, inputs):
-        retrieve_query, demuc, role, top_k = inputs
+        retrieve_query = inputs["query"]
+        demuc = inputs["demuc"]
+        role = inputs["role"]
+        top_k = inputs["top_k"]
         
         # Call Qdrant retrieval utility function
         from utils.knowledge_base.qdrant_retrieval import retrieve_from_qdrant

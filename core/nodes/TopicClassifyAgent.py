@@ -50,10 +50,20 @@ class TopicClassifyAgent(Node):
         if rag_state == "create_retrieval_query_reason":
             current_demuc = ""
             
-        return query, role, current_demuc, current_chu_de_con, rag_state
+        return {
+            "query": query,
+            "role": role,
+            "current_demuc": current_demuc,
+            "current_chu_de_con": current_chu_de_con,
+            "rag_state": rag_state
+        }
 
     def exec(self, inputs):
-        query, role, current_demuc, current_chu_de_con, rag_state = inputs
+        query = inputs["query"]
+        role = inputs["role"]
+        current_demuc = inputs["current_demuc"]
+        current_chu_de_con = inputs["current_chu_de_con"]
+        rag_state = inputs["rag_state"]
         demuc_result = {"confidence": "", "reason": ""}
         from utils.knowledge_base.metadata_utils import (
             get_demuc_list_for_role,
