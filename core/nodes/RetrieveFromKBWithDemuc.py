@@ -61,8 +61,8 @@ class RetrieveFromKBWithDemuc(Node):
         role = inputs["role"]
         top_k = inputs["top_k"]
         
-        # Call Qdrant retrieval utility function
-        from utils.knowledge_base.qdrant_retrieval import retrieve_from_qdrant
+        # Call Qdrant retrieval utility function with cached embeddings
+        from utils.knowledge_base.qdrant_retrieval import retrieve_from_qdrant_with_cached_embeddings
 
         # Map role to collection name
         collection_name = ROLE_TO_COLLECTION.get(role, "bnrhm")
@@ -71,25 +71,30 @@ class RetrieveFromKBWithDemuc(Node):
         # 1. Search WITH demuc filter on current role's collection (narrow context)
         # 2. Search WITHOUT filters on ALL 4 collections (global context)
         # 3. Combine and deduplicate
-
+        
+        # NEW: Embed query ONCE and reuse for all searches
+        logger.info(f"📚 [RetrieveFromKBWithDemuc] Embedding query once for reuse...")
+        
         # 1. Filtered search (by demuc only) on current role's collection
-        retrieved_results_filtered = retrieve_from_qdrant(
+        retrieved_results_filtered, embeddings = retrieve_from_qdrant_with_cached_embeddings(
             query=retrieve_query,
             demuc=demuc,
             chu_de_con=None,  # Ignore sub-topic
             top_k=top_k,
-            collection_name=collection_name
+            collection_name=collection_name,
+            return_embeddings=True  # Get embeddings for reuse
         )
         
-        # 2. Global search across ALL 4 collections (no filters)
+        # 2. Global search across ALL 4 collections (no filters) - REUSE embeddings
         retrieved_results_global = []
         for col_role, col_name in ROLE_TO_COLLECTION.items():
-            results = retrieve_from_qdrant(
+            results, _ = retrieve_from_qdrant_with_cached_embeddings(
                 query=retrieve_query,
                 demuc=None,
                 chu_de_con=None,
-                top_k=top_k // 2,  # Get fewer from each collection to balance
-                collection_name=col_name
+                top_k=top_k // 2 ,  # Get fewer from each collection to balance
+                collection_name=col_name,
+                embeddings=embeddings  # REUSE embeddings instead of re-computing
             )
             retrieved_results_global.extend(results)
             logger.info(f"📚 [RetrieveFromKBWithDemuc] Global search from '{col_name}': {len(results)} results")

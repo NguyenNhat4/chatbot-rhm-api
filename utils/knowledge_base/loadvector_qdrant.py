@@ -28,6 +28,9 @@ DENSE_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 SPARSE_MODEL_NAME = "Qdrant/bm25"
 LATE_INTERACTION_MODEL_NAME = "colbert-ir/colbertv2.0"
 
+# Cache directory for embedding models
+FASTEMBED_CACHE = os.getenv("FASTEMBED_CACHE_PATH", "./models")
+
 # Collection configurations: collection_name -> (csv_filename, required_columns)
 COLLECTION_CONFIGS = {
     "bndtd": ("bndtd.csv", ["DEMUC", "CHUDECON", "CAUHOI", "CAUTRALOI", "GIAITHICH"]),
@@ -65,7 +68,7 @@ def expand_abbreviations(text: str) -> str:
 
 
 class EmbeddingModels:
-    """Container for embedding models with lazy loading."""
+    """Container for embedding models with lazy loading and cache support."""
 
     def __init__(self):
         self.dense_model = None
@@ -73,18 +76,27 @@ class EmbeddingModels:
         self.late_interaction_model = None
 
     def load(self):
-        """Load all embedding models."""
-        print("Loading embedding models...")
+        """Load all embedding models from cache directory."""
+        print(f"Loading embedding models from cache: {FASTEMBED_CACHE}")
         print(f"  - Dense model: {DENSE_MODEL_NAME}")
-        self.dense_model = TextEmbedding(DENSE_MODEL_NAME)
+        self.dense_model = TextEmbedding(
+            DENSE_MODEL_NAME,
+            cache_dir=FASTEMBED_CACHE
+        )
 
         print(f"  - Sparse model: {SPARSE_MODEL_NAME}")
-        self.sparse_model = SparseTextEmbedding(SPARSE_MODEL_NAME)
+        self.sparse_model = SparseTextEmbedding(
+            SPARSE_MODEL_NAME,
+            cache_dir=FASTEMBED_CACHE
+        )
 
         print(f"  - Late interaction model: {LATE_INTERACTION_MODEL_NAME}")
-        self.late_interaction_model = LateInteractionTextEmbedding(LATE_INTERACTION_MODEL_NAME)
+        self.late_interaction_model = LateInteractionTextEmbedding(
+            LATE_INTERACTION_MODEL_NAME,
+            cache_dir=FASTEMBED_CACHE
+        )
 
-        print("All models loaded successfully.\n")
+        print("All models loaded from cache successfully.\n")
 
 
 def load_csv_data(csv_path: str, required_columns: List[str]) -> List[Dict[str, str]]:

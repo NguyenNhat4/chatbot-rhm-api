@@ -7,7 +7,8 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    FASTEMBED_CACHE_PATH=/app/models
 
 # Install system dependencies
 RUN apt-get update \
@@ -24,6 +25,19 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
+# Create cache directory for models
+RUN mkdir -p /app/models
+
+# Pre-download embedding models to cache them in Docker image
+# This prevents re-downloading models on every container startup
+RUN python -c "from fastembed import TextEmbedding, SparseTextEmbedding, LateInteractionTextEmbedding; \
+    TextEmbedding('sentence-transformers/all-MiniLM-L6-v2', cache_dir='/app/models'); \
+    print('📥 Downloading sparse model...'); \
+    SparseTextEmbedding('Qdrant/bm25', cache_dir='/app/models'); \
+    print('📥 Downloading late interaction model...'); \
+    LateInteractionTextEmbedding('colbert-ir/colbertv2.0', cache_dir='/app/models'); \
+    print('✅ All models cached successfully!')"
+
 # Copy application code
 COPY . .
 
@@ -31,7 +45,8 @@ COPY . .
 RUN useradd --create-home --shell /bin/bash app \
     && mkdir -p /app/logs \
     && chown -R app:app /app \
-    && chmod -R 755 /app/logs
+    && chmod -R 755 /app/logs \
+    && chmod -R 755 /app/models
 USER app
 
 # Expose port
