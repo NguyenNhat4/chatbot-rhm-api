@@ -6,7 +6,7 @@ According to PocketFlow best practices, this should be independent and easily te
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from qdrant_client import QdrantClient, models
 from fastembed import TextEmbedding, LateInteractionTextEmbedding, SparseTextEmbedding
 import os 
@@ -14,6 +14,10 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 load_dotenv(override=False)
+
+# Cache directory for embedding models
+FASTEMBED_CACHE = os.getenv("FASTEMBED_CACHE_PATH", "./models")
+
 # Global embedding models (lazy loaded)
 _dense_model = None
 _sparse_model = None
@@ -22,18 +26,28 @@ _late_interaction_model = None
 
 def _get_embedding_models():
     """
-    Lazy load embedding models (singleton pattern).
+    Lazy load embedding models (singleton pattern) with cache support.
+    Models are loaded from cache directory to avoid re-downloading.
 
     Returns: (dense_model, sparse_model, late_interaction_model)
     """
     global _dense_model, _sparse_model, _late_interaction_model
 
     if _dense_model is None:
-        logger.info("[Qdrant] Loading embedding models...")
-        _dense_model = TextEmbedding("sentence-transformers/all-MiniLM-L6-v2")
-        _sparse_model = SparseTextEmbedding("Qdrant/bm25")
-        _late_interaction_model = LateInteractionTextEmbedding("colbert-ir/colbertv2.0")
-        logger.info("[Qdrant] Embedding models loaded successfully")
+        logger.info(f"[Qdrant] Loading embedding models from cache: {FASTEMBED_CACHE}")
+        _dense_model = TextEmbedding(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            cache_dir=FASTEMBED_CACHE
+        )
+        _sparse_model = SparseTextEmbedding(
+            "Qdrant/bm25",
+            cache_dir=FASTEMBED_CACHE
+        )
+        _late_interaction_model = LateInteractionTextEmbedding(
+            "colbert-ir/colbertv2.0",
+            cache_dir=FASTEMBED_CACHE
+        )
+        logger.info("[Qdrant] Embedding models loaded from cache successfully")
 
     return _dense_model, _sparse_model, _late_interaction_model
 
@@ -265,3 +279,134 @@ if __name__ == "__main__":
             qa = full_qa[0]
             print(f"Q: {qa.get('CAUHOI', 'N/A')}")
             print(f"A: {qa.get('CAUTRALOI', 'N/A')[:150]}...")
+
+
+def retrieve_from_qdrant_with_cached_embeddings(
+    query: str,
+    demuc: Optional[str] = None,
+    chu_de_con: Optional[str] = None,
+    top_k: int = 20,
+    collection_name: str = "bnrhm",
+    qdrant_url: str = os.getenv("QDRANT_URL"),
+    use_late_interaction: bool = True,
+    embeddings: Optional[Dict] = None,
+    return_embeddings: bool = False
+) -> Tuple[List[Dict[str, Any]], Optional[Dict]]:
+    """
+    Retrieve documents from Qdrant with support for embedding reuse.
+    
+    This optimized version allows reusing embeddings across multiple searches,
+    significantly improving performance when searching multiple collections.
+    
+    Args:
+        embeddings: Optional dict with keys 'dense', 'sparse', 'late' to reuse
+        return_embeddings: If True, return embeddings for reuse in next calls
+        ... (other args same as retrieve_from_qdrant)
+    
+    Returns:
+        Tuple of (results, embeddings) if return_embeddings=True, else (results, None)
+    """
+    try:
+        logger.info(f"[retrieve_cached] Query: '{query[:50]}...', Collection: {collection_name}")
+
+        # Get embedding models (singleton, loaded once)
+        dense_model, sparse_model, late_interaction_model = _get_embedding_models()
+
+        # Reuse embeddings if provided, otherwise compute new ones
+        if embeddings:
+            logger.info(f"[retrieve_cached] ✨ Reusing cached embeddings")
+            dense_vectors = embeddings['dense']
+            sparse_vectors = embeddings['sparse']
+            late_vectors = embeddings.get('late')
+        else:
+            logger.info(f"[retrieve_cached] 🔄 Computing new embeddings")
+            dense_vectors = next(dense_model.query_embed(query))
+            sparse_vectors = next(sparse_model.query_embed(query))
+            late_vectors = None
+            if use_late_interaction:
+                late_vectors = next(late_interaction_model.query_embed(query))
+
+        # Create Qdrant client
+        client = QdrantClient(url=qdrant_url)
+
+        # Build prefetch for hybrid search
+        prefetch = [
+            models.Prefetch(
+                query=dense_vectors,
+                using="all-MiniLM-L6-v2",
+                limit=top_k + 100,
+            ),
+            models.Prefetch(
+                query=models.SparseVector(**sparse_vectors.as_object()),
+                using="bm25",
+                limit=top_k + 100,
+            ),
+        ]
+
+        # Build filter based on DEMUC and CHU_DE_CON
+        query_filter = None
+        if demuc or chu_de_con:
+            conditions = []
+            if demuc:
+                conditions.append(
+                    models.FieldCondition(
+                        key="DEMUC",
+                        match=models.MatchValue(value=demuc)
+                    )
+                )
+            if chu_de_con:
+                conditions.append(
+                    models.FieldCondition(
+                        key="CHUDECON",
+                        match=models.MatchValue(value=chu_de_con)
+                    )
+                )
+            query_filter = models.Filter(must=conditions)
+
+        # Execute hybrid search with optional late interaction reranking
+        if use_late_interaction and late_vectors is not None:
+            search_result = client.query_points(
+                collection_name=collection_name,
+                prefetch=prefetch,
+                query=late_vectors,
+                using="colbertv2.0",
+                limit=top_k,
+                query_filter=query_filter,
+            )
+        else:
+            # Fallback: search without late interaction
+            search_result = client.query_points(
+                collection_name=collection_name,
+                prefetch=prefetch,
+                query=dense_vectors,
+                using="all-MiniLM-L6-v2",
+                limit=top_k,
+                query_filter=query_filter,
+            )
+
+        # Format results
+        results = []
+        for point in search_result.points:
+            results.append({
+                "id": point.id,
+                "score": point.score,
+                "collection": collection_name,
+                **point.payload
+            })
+
+        logger.info(f"[retrieve_cached] ✅ Retrieved {len(results)} results")
+
+        # Return embeddings for reuse if requested
+        if return_embeddings:
+            emb_cache = {
+                'dense': dense_vectors,
+                'sparse': sparse_vectors,
+                'late': late_vectors
+            }
+            return results, emb_cache
+        
+        return results, None
+
+    except Exception as e:
+        logger.error(f"[retrieve_cached] ❌ Error: {e}", exc_info=True)
+        return [], None

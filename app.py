@@ -80,6 +80,16 @@ async def startup_event():
         logger.error(f"❌ Failed to preload OQA index: {e}")
         logger.info("⚠️  OQA will be lazy-loaded on first request")
 
+    # Preload embedding models for Qdrant retrieval
+    logger.info("🔄 Preloading embedding models for Qdrant...")
+    try:
+        from utils.knowledge_base.qdrant_retrieval import _get_embedding_models
+        _get_embedding_models()
+        logger.info("✅ Embedding models preloaded successfully")
+    except Exception as e:
+        logger.error(f"❌ Failed to preload embedding models: {e}")
+        logger.info("⚠️  Models will be lazy-loaded on first request")
+
     logger.info("🎉 All startup tasks completed!")
 
 
