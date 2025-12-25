@@ -46,7 +46,7 @@ class QueryCreatingForRetrievalAgent(Node):
         # Import dependencies only when needed
         from utils.llm import call_llm
         from utils.parsing import parse_yaml_with_schema
-        from utils.auth import APIOverloadException
+        from utils.llm.call_llm import APIOverloadException
         from config.timeout_config import timeout_config
         from utils.role_enum import RoleEnum, ROLE_DISPLAY_NAME
         

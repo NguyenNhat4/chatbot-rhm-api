@@ -10,7 +10,7 @@ from utils.role_enum import RoleEnum, PERSONA_BY_ROLE
 from utils.helpers import format_kb_qa_list
 from utils.llm import call_llm
 from utils.parsing import parse_yaml_with_schema
-from utils.auth import APIOverloadException
+from utils.llm.call_llm import APIOverloadException
 from config.timeout_config import timeout_config
 from config.chat_config import chat_config
 

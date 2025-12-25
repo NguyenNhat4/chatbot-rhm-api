@@ -62,7 +62,7 @@ class RagAgent(Node):
     def exec(self, inputs):
         from utils.llm import call_llm
         from utils.parsing import parse_yaml_with_schema
-        from utils.auth import APIOverloadException
+        from utils.llm.call_llm import APIOverloadException
         from config.timeout_config import timeout_config
         
         # Handle hard check fallback from prep()
