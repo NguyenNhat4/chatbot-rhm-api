@@ -44,6 +44,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from:
+        - chatbot-rhm-api:latest
     container_name: chatbot-rhm-api
     ports:
       - "${API_PORT}:8000"
