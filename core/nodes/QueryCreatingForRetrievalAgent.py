@@ -111,6 +111,17 @@ confidence: "high"  # hoặc medium, low
         return {"retrieval_query": current_user_input, "confidence": "low", "reason": "Failed to create optimized query"}
 
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("🔍 [QueryCreatingForRetrievalAgent] POST - exec_res is None, using fallback query")
+            # Use original query as fallback
+            original_query = shared.get("query", "")
+            shared["retrieval_query"] = original_query
+            shared["retrieval_query_confidence"] = "low"
+            shared["retrieval_query_reason"] = "Error occurred during query creation"
+            shared["from_better_query"] = False
+            return "default"
+
         logger.info(f"🔍 [QueryCreatingForRetrievalAgent] POST - Storing retrieval query")
 
         # Extract results

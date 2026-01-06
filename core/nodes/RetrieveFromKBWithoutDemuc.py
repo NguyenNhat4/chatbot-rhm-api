@@ -87,11 +87,21 @@ class RetrieveFromKBWithoutDemuc(Node):
         return candidates
 
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("📚 [RetrieveFromKBWithoutDemuc] POST - exec_res is None, using empty candidates")
+            shared["retrieved_candidates"] = []
+            shared["selected_ids"] = []
+            shared["selected_ids_by_collection"] = {}
+            shared["selected_questions"] = []
+            shared["rag_state"] = "error"
+            return "default"
+
         candidates = exec_res
 
         # Save lightweight candidates to shared store
         shared["retrieved_candidates"] = candidates
-        
+
         # Group IDs by collection for efficient multi-collection retrieval
         ids_by_collection = {}
         for c in candidates:
@@ -99,14 +109,14 @@ class RetrieveFromKBWithoutDemuc(Node):
             if collection not in ids_by_collection:
                 ids_by_collection[collection] = []
             ids_by_collection[collection].append(c["id"])
-        
+
         # Save both formats for compatibility
         shared["selected_ids"] = [c["id"] for c in candidates]  # Legacy format
         shared["selected_ids_by_collection"] = ids_by_collection  # New format for multi-collection
         shared["selected_questions"] = [c["CAUHOI"] for c in candidates]
-        
+
         logger.info(f"📚 [RetrieveFromKBWithoutDemuc] POST - IDs grouped by collection: {[(k, len(v)) for k, v in ids_by_collection.items()]}")
-        
+
         # Update RAG state
         shared["rag_state"] = "retrieved"
         return "default"

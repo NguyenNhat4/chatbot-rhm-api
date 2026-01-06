@@ -152,21 +152,30 @@ Trả về chính xác cấu trúc yaml như ở trên (chú ý suggestion_quest
 
 
     def post(self, shared, prep_res, exec_res):
-   
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            shared["answer_obj"] = {
+                "explanation": "Xin lỗi, đã có lỗi xảy ra khi xử lý câu trả lời.",
+                "suggestion_questions": []
+            }
+            shared["explain"] = "Xin lỗi, đã có lỗi xảy ra khi xử lý câu trả lời."
+            shared["suggestion_questions"] = []
+            return "fallback"
+
         logger.info("✍️ [ComposeAnswer] POST - Lưu answer object")
         shared["answer_obj"] = exec_res
         shared["explain"] = exec_res.get("explanation", "")
         shared["suggestion_questions"] = exec_res.get("suggestion_questions", [])
         logger.info(f"✍️ [ComposeAnswer] POST - Answer keys: {list(exec_res.keys())}")
-        
+
         # Log answer preview with safe truncation
         answer_preview = exec_res.get('explain', '')
         preview_text = answer_preview[:100] if answer_preview else 'None'
         logger.info(f"✍️ [ComposeAnswer] POST - Answer preview: {preview_text}...")
-        
+
         # Check if API overload occurred and route to fallback
         if exec_res.get("api_overload", False):
             logger.info("✍️ [ComposeAnswer] POST - API overloaded, routing to fallback")
             return "fallback"
-        
+
         return "default"

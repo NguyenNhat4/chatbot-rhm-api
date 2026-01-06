@@ -143,6 +143,12 @@ Trả về chính xác cấu trúc yml trên:
             raise
 
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("  [RagAgent] POST - exec_res is None, routing to compose_answer")
+            shared["rag_state"] = "composing"
+            return "compose_answer"
+
         next_action = exec_res["next_action"]
         reason = exec_res.get("reason", "")
         action_history = exec_res.get("action_history", [])

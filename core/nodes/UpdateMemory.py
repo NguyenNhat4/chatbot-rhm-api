@@ -127,6 +127,12 @@ class UpdateMemory(AsyncParallelBatchNode):
 
     async def post_async(self, shared, prep_res, exec_res):
         """Aggregate results from parallel execution"""
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("🔄 [UpdateMemory] POST - exec_res is None, no operations executed")
+            shared["update_memory_result"] = {"success": False, "updated": 0, "total": 0, "results": [], "error": "Unhandled exception"}
+            return "default"
+
         if not exec_res:
             logger.info(f"🔄 [UpdateMemory] POST - No operations executed")
             shared["update_memory_result"] = {"success": True, "updated": 0, "total": 0, "results": []}

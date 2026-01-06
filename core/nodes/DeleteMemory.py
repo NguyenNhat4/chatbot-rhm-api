@@ -150,6 +150,12 @@ class DeleteMemory(AsyncNode):
 
     async def post_async(self, shared, prep_res, exec_res):
         """Store results in shared state"""
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("🗑️ [DeleteMemory] POST - exec_res is None, no operations executed")
+            shared["delete_memory_result"] = {"success": False, "deleted": 0, "total": 0, "results": [], "error": "Unhandled exception"}
+            return "default"
+
         deleted = exec_res.get("deleted", 0)
         total = exec_res.get("total", 0)
 

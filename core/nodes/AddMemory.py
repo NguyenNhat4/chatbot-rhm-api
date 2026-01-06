@@ -82,6 +82,12 @@ class AddMemory(AsyncParallelBatchNode):
         return {"index": index, "success": False, "reason": f"Failed after {self.max_retries} retries", "content": content[:50]}
 
     async def post_async(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("➕ [AddMemory] POST - exec_res is None, no operations executed")
+            shared["add_memory_result"] = {"success": False, "inserted": 0, "total": 0, "results": [], "error": "Unhandled exception"}
+            return "default"
+
         # exec_res is a list of results from all parallel executions
         if not exec_res:
             logger.info(f"➕ [AddMemory] POST - No operations executed")
