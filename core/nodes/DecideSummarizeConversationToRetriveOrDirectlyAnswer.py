@@ -73,7 +73,7 @@ Các vấn đề người dùng từng quan tâm/hỏi trước đây (Context b
 current user input: "{query}"
 user role: {user_role_name}
 Chọn 1 trong 2 Hành động:
-- direct_response: chào, hỏi người dùng để hiểu họ cần hỗ trợ gì về y tế, trả lời trực tiếp hội thoại đủ thông tin, hoặc bị lặp lại.
+- direct_response: chào, hỏi người dùng để hiểu họ cần hỗ trợ gì về y tế, Không tự đưa ra lời khuyên về y tế.
 - retrieve_kb: chuyển tiếp cho rag agent tra kiến thức y tế chuẩn để trả lời.
 Lưu ý:
 - Hãy dựa vào ngữ cảnh hội thoại và lịch sử câu hỏi của người dùng (nếu có) để hiểu câu hỏi và quyết định phù hợp
@@ -119,6 +119,18 @@ Trả về YAML như mẫu :
         return {"type": "direct_response", "explanation": "Xin lỗi, hiện tại tôi không thể xử lý yêu cầu của bạn.", "context_summary": ""}
         
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("[DecideSummarizeConversationToRetriveOrDirectlyAnswer] POST - exec_res is None, routing to fallback")
+            shared["answer_obj"] = {
+                "explain": "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn.",
+                "preformatted": True,
+                "suggestion_questions": []
+            }
+            shared["explain"] = "Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu của bạn."
+            shared["suggestion_questions"] = []
+            return "fallback"
+
         input_type = exec_res.get("type", "")
         explanation = exec_res.get("explanation", "")
         context_summary = exec_res.get("context_summary", "")

@@ -137,6 +137,16 @@ class RetrieveFromKBWithDemuc(Node):
         return candidates
 
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("📚 [RetrieveFromKBWithDemuc] POST - exec_res is None, using empty candidates")
+            shared["retrieved_candidates"] = []
+            shared["selected_ids"] = []
+            shared["selected_ids_by_collection"] = {}
+            shared["selected_questions"] = []
+            shared["rag_state"] = "error"
+            return "loop"
+
         candidates = exec_res
 
         # Save lightweight candidates to shared store

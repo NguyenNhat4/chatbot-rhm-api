@@ -75,7 +75,7 @@ Câu truy vấn cần tập trung vào:
 vui lòng trả lời dưới định dạng YAML như sau:
 ```yaml
 memory_query: |
-    Câu truy vấn tối ưu để tìm kiếm memory
+    Câu truy vấn tối ưu để tìm kiếm memory liên quan đến người dùng dựa trên bối cảnh và câu hỏi hiện tại.
 reason: |
     Lý do ngắn gọn về cách tạo query
 ```"""
@@ -117,6 +117,12 @@ reason: |
         return memories
 
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("🧠 [RetrieveFromMemory] POST - exec_res is None, setting empty memories")
+            shared["relevant_memories"] = []
+            return "default"
+
         shared["relevant_memories"] = exec_res
 
         # Log a snippet of the first memory if available

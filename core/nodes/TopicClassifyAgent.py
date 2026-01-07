@@ -116,6 +116,13 @@ class TopicClassifyAgent(Node):
         }     
      
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("🏷️ [TopicClassifyAgent] POST - exec_res is None, using empty classification")
+            shared["demuc"] = ""
+            shared["chu_de_con"] = ""
+            shared["classification_confidence"] = "low"
+            return "fallback"
 
         # Update shared with classification results - WRITE ONLY
         shared["demuc"] = exec_res.get("demuc", "")

@@ -98,7 +98,7 @@ class MemoryManager(AsyncNode):
 
         prompt = f"""
 # NHIỆM VỤ:
-Bạn là Memory Manager - hệ thống quản lý bộ nhớ thông minh. Phân tích hội thoại và quyết định các thao tác cần thực hiện.
+Bạn là Memory Manager - hệ thống quản lý bộ nhớ thông minh về *NGƯỜI DÙNG* mục tiêu cho cá nhân hoá. Phân tích hội thoại và quyết định các thao tác cần thực hiện.
 
 # BỐI CẢNH HỘI THOẠI:
 - Tóm tắt hội thoại trước: {context_summary}
@@ -107,15 +107,10 @@ Bạn là Memory Manager - hệ thống quản lý bộ nhớ thông minh. Phân
 {memories_context}
 
 # CÁC THAO TÁC:
-1. **INSERT**: Thêm memory mới - thông tin hoàn toàn mới và quan trọng
-2. **UPDATE**: Cập nhật memory cũ - thông tin đã thay đổi/bổ sung
+1. **INSERT**: Thêm memory mới
+2. **UPDATE**: Cập nhật memory cũ - thông tin đã được bổ sung/sửa đổi
 3. **DELETE**: Xóa memory cũ - thông tin sai/lỗi thời/không còn liên quan
 
-# QUY TẮC:
-- INSERT: Thông tin cá nhân mới (tên, tuổi, nghề), sức khỏe, sở thích, gia đình chưa có
-- UPDATE: Thông tin cũ cần cập nhật (tuổi mới, công việc mới, tình trạng sức khỏe thay đổi)
-- DELETE: Thông tin trong memory hoàn toàn sai hoặc người dùng đã sửa/phủ nhận
-- SKIP ALL: Chào hỏi xã giao, thông tin tổng quát, hoặc đã đầy đủ trong memory
 
 # YÊU CẦU ĐỊNH DẠNG (QUAN TRỌNG):
 - Sử dụng Block Scalar (|) cho văn bản
@@ -123,6 +118,7 @@ Bạn là Memory Manager - hệ thống quản lý bộ nhớ thông minh. Phân
 - Mỗi operation có: memory_id (nếu UPDATE/DELETE), content (nếu INSERT/UPDATE)
 - BẮT BUỘC có field "reason" giải thích quyết định
 - Optional: field "importance" (low/medium/high)
+
 
 # VÍ DỤ:
 ```yaml
@@ -197,6 +193,14 @@ Trả về duy nhất một block code YAML (nhớ bao gồm field "reason"):
         }
 
     async def post_async(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("🎯 [MemoryManager] POST - exec_res is None, skipping memory operations")
+            shared["memory_operations"] = {"insert": [], "update": [], "delete": []}
+            shared["memory_manager_reason"] = "Error occurred during processing"
+            shared["memory_importance"] = "low"
+            return "skip"
+
         # Store operation decisions in shared state for worker nodes
         shared["memory_operations"] = exec_res.get("operations", {})
         shared["memory_manager_reason"] = exec_res.get("reason", "")

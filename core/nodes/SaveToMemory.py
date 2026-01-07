@@ -55,6 +55,13 @@ class SaveToMemory(Node):
         return {"success": success}
 
     def post(self, shared, prep_res, exec_res):
+        # Handle None exec_res (unhandled exceptions)
+        if exec_res is None:
+            logger.error("💾 [SaveToMemory] POST - exec_res is None, memory save failed")
+            shared["save_memory_result"] = {"success": False, "error": "Unhandled exception"}
+            return "default"
+
         # Nothing specific to update in shared state for now, just logging
-        logger.info(f"💾 [SaveToMemory] POST - Memory save status: {exec_res['success']}")
+        logger.info(f"💾 [SaveToMemory] POST - Memory save status: {exec_res.get('success', False)}")
+        shared["save_memory_result"] = exec_res
         return "default"
