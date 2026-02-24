@@ -1,6 +1,19 @@
 # Chatbot RHM API
 
-Medical chatbot API with RAG (Retrieval Augmented Generation) using Qdrant vector database.
+This project is an intelligent Multi-Agent system designed to serve as a reliable medical information bridge for both healthcare professionals (facilitating cross-training between dentistry and endocrinology) and patients (providing accessible diabetes care advice). To guarantee strict medical accuracy and eliminate AI hallucinations, the system utilizes a Retrieval-Augmented Generation (RAG) architecture over a closed-domain dataset of approximately 3,100 expert-curated Q&A pairs, ensuring responses are retrieved from vetted knowledge rather than generated from scratch. Specialized agents dynamically adapt the retrieved information, delivering in-depth clinical terminology for doctors and clear, everyday language for patients. Future development will expand this architecture to dynamically query authoritative external medical databases, such as PubMed, for even broader, real-time information retrieval.
+
+# System architecture diagram
+![alt text](images/system-architecture.png)
+
+# Medflow diagram
+![alt text](images/medflow.png)
+
+# User agentic memory diagram
+![alt text](images/user-agentic-memory.png)
+
+# Medical knowledge ingestion pipeline
+![alt text](images/medical-knowledge-ingestion-pipeline.png)
+
 
 ## Prerequisites
 
